@@ -1,3 +1,6 @@
+import numpy as np
+import pandas as pd
+
 class ListBasedStudyLoader:
     def __init__(self):
         # ---- Hard-coded replacement dictionary ----
@@ -19,6 +22,7 @@ class ListBasedStudyLoader:
             ('admission_date_time',):'Admission_date',
             ('surgery_date_time',):'Surgery_date',
             ('teg_date_time','lab_dt_blood_draw'):'Draw_date',
+            
             
         }
 
@@ -56,52 +60,24 @@ class ListBasedStudyLoader:
                        'unscheduled 3 months follow up']
         }
 
-        # ---- Hard-coded medications ----
+        # ---- Hard-coded medications (Pre_operative OACS) ----
         self.medications = {
-            "TH-162": "Apixaban",
-            "TH-170": "Apixaban",
-            "TH-198": "Apixaban",
-            "TH-212": "Apixaban",
-            "TH-217": "Apixaban",
-            "TH-225": "Apixaban",
-            "TH-227": "Dabigatran",
-            "TH-236": "Edoxaban",
-            "TH-240": "Apixaban",
-            "TH-255": "Apixaban",
-            "TH-262": "Apixaban",
-            "TH-267": "Dabigatran",
-            "TH-274": "Apixaban",
-            "TH-284": "Apixaban",
-            "TH-302": "Apixaban",
-            # HPA 
-            "HPA-001": "Apixaban",
-            "HPA-004": "Rivaroxaban",
-            "HPA-008": "Apixaban",
-            "HPA-009": "Apixaban",
-            "HPA-010": "Apixaban",
-            "HPA-012": "Apixaban",
-            "HPA-014": "Apixaban",
-            "HPA-015": "Rivaroxaban",
-            "HPA-016": "Apixaban",
-            "HPA-017": "Apixaban",
-            "HPA-019": "Rivaroxaban",
-            "HPA-020": "Rivaroxaban",
-            "HPA-021": "Apixaban",
-            "HPA-022": "Apixaban",
-            "HPA-024": "Rivaroxaban",
-            "HPA-026": "Apixaban",
-            "HPA-028": "Apixaban",
-            "HPA-029": "Rivaroxaban",
-            "HPA-030": "Apixaban",
-            "HPA-032": "Rivaroxaban",
-            "HPA-033": "Apixaban",
-            "HPA-035": "Apixaban",
-            "HPA-036": "Apixaban",
-            "HPA-038": "Dabigatran",
-            "HPA-039": "Apixaban",
-            "HPA-042": "Apixaban",
-            "HPA-043": "Apixaban"
+            **dict.fromkeys(
+        ["TH-162","TH-170","TH-198","TH-212","TH-217","TH-225","TH-240","TH-255","TH-262",
+         "TH-274","TH-284","TH-302","HPA-001","HPA-008","HPA-009","HPA-010","HPA-012","HPA-014","HPA-016","HPA-017",
+         "HPA-021","HPA-022","HPA-026","HPA-028","HPA-030","HPA-033","HPA-035","HPA-036","HPA-039","HPA-042","HPA-043"], "Apixaban"),
+
+            **dict.fromkeys(["TH-227","TH-267","HPA-038"], "Dabigatran"),
+
+            **dict.fromkeys(["TH-236","HPA-004","HPA-015","HPA-019","HPA-020","HPA-024","HPA-029","HPA-032"], "Rivaroxaban")
         }
+
+        self.vte_type_map = {**dict.fromkeys(
+            ["TH-003","TH-201","TH-227","TH-253","TH-264","TH-301","HPA-010","HPA-015","HPA-019","HPA-021"], "DVT"),
+            **dict.fromkeys(["TH-082","TH-088","TH-271","TH-292","HPA-022","HPA-042"], "PE"),
+            **dict.fromkeys(["TH-261","TH-279","HPA-001","HPA-004","HPA-032"], "Both")
+        }
+        
 
     def standardize_columns(self, df):
         # Combine date + time columns
@@ -126,11 +102,16 @@ class ListBasedStudyLoader:
                 errors='coerce'
             )
 
-        # Drop original columns
+            # Drop original columns
         columns_to_drop = ['adm_injury_date', 'adm_injury_time',
                            'intraop_date_surg', 'intraop_time_surg',
                            'adm_er_date','adm_er_time','teg_time','teg_date']
         df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
+
+       
+
+        
+        
 
         # Rename columns
         col_map = {}
@@ -150,7 +131,8 @@ class ListBasedStudyLoader:
             df["StudyID"] = df["StudyID"].ffill()
 
         # Fill Age, Sex, BMI per StudyID
-        fill_cols = ["Age", "Sex", "BMI", "Injury_date","Surgery_date","Admission_date"]
+        
+        fill_cols = ["Age", "Sex", "BMI", "Injury_date","Surgery_date","Admission_date",'complication_dvt','complication_pe','bl_comorb_vte']
         if "StudyID" in df.columns:
             for col in fill_cols:
                 if col in df.columns:
@@ -160,6 +142,11 @@ class ListBasedStudyLoader:
         if "StudyID" in df.columns:
             df["Medication"] = df["StudyID"].map(self.medications)
             df["DOAC_status"] = np.where(df["Medication"].isnull(), "Non_OAC", "OAC")
+
+        # Add VTE column
+        if "StudyID" in df.columns:
+            df["VTE"] = df["StudyID"].map(self.vte_type_map)
+
 
 
         # Convert date columns to datetime
@@ -177,7 +164,7 @@ class ListBasedStudyLoader:
         if "Time" in df.columns:
             df["Time"] = df["Time"].astype(str).str.strip().apply(self._map_timepoint)
             df = self._fix_preop_to_admission(df)
-            # df = df[df["Time"].notna() & (df["Time"].str.lower() != "nan")]
+            
 
         return df
 
