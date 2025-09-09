@@ -80,6 +80,30 @@ class RedcapProcessor:
             "Month6": ['6 months']
         }
 
+
+        self.sex_dict = {'1':'Male', '2':'Female'}
+
+        self.medications = {
+            **dict.fromkeys(
+                ['HPA-001', 'HPA-004', 'HPA-008', 'HPA-009', 'HPA-010', 'HPA-012',
+            'HPA-014', 'HPA-015', 'HPA-016', 'HPA-017', 'HPA-019', 'HPA-020',
+            'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028', 'HPA-029',
+            'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036', 'HPA-038',
+            'HPA-039', 'HPA-042', 'HPA-043', 'TH-004', 'TH-010', 'TH-075',
+            'TH-088', 'TH-101', 'TH-110', 'TH-162', 'TH-170', 'TH-194',
+            'TH-198', 'TH-212', 'TH-217', 'TH-225', 'TH-226', 'TH-236',
+            'TH-240', 'TH-244', 'TH-255', 'TH-262', 'TH-267', 'TH-274',
+            'TH-284', 'TH-286', 'TH-290', 'TH-302'], "OAC")
+        }
+
+
+        self.vte_type_map = {**dict.fromkeys(
+            ["TH-003","TH-201","TH-227","TH-253","TH-264","TH-301"], "DVT"),
+            **dict.fromkeys(["TH-082","TH-088","TH-271","TH-292","HPA-028"], "PE"),
+            **dict.fromkeys(["TH-261","TH-279"], "Both")
+        }
+
+
         # ---- Define metadata and lab columns ----
         self.metadata_cols = ['StudyID','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date']
         self.lab_cols = ['StudyID','Time','Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA','LY30', 'ACT']
@@ -108,6 +132,15 @@ class RedcapProcessor:
                     col_mapping[k] = standard_name
         df = df.rename(columns=col_mapping)
 
+
+        
+
+        # --- Step 4: Assign to self.df BEFORE replacing missing values ---
+        self.df = df
+
+
+        self._replace_missing_values()
+
         # Step 4: Filter by screening_status (if column exists)
         if 'screening_status' in df.columns:
             
@@ -122,9 +155,36 @@ class RedcapProcessor:
         
             df = df[df['screening_status'].astype(str).str.strip() == '1']
 
+        if 'teg_time' in df.columns and 'Draw_date' in df.columns:
+            df['Draw_date'] = pd.to_datetime(df['Draw_date'].astype(str) + ' ' + df['teg_time'].astype(str),
+            errors='coerce')
+
+        if 'adm_injury_time' in df.columns and 'Injury_date' in df.columns:
+            df['Injury_date'] = pd.to_datetime(df['Injury_date'].astype(str) + ' ' + df['adm_injury_time'].astype(str),
+            errors='coerce')
+
+        if 'intraop_time_surg' in df.columns and 'Surgery_date' in df.columns:
+            df['Surgery_date'] = pd.to_datetime(df['Surgery_date'].astype(str) + ' ' + df['intraop_time_surg'].astype(str),
+            errors='coerce')
+
+
+
+
+
+
+
+
+            
+
         # Step 5: Standardize timepoints
         if 'Time' in df.columns:
             df['Time'] = df['Time'].apply(self._map_timepoint)
+
+
+        if 'Sex' in df.columns:
+            df['Sex'] = df['Sex'].map(self.sex_dict).astype(object)
+            
+            
 
         # Step 6: Ensure all metadata columns exist
         for col in self.metadata_cols:
@@ -139,6 +199,13 @@ class RedcapProcessor:
 
         return self.df
 
+    # -----------------------
+    # Map timepoints
+    # -----------------------
+    def _replace_missing_values(self):
+        """Convert common REDCap missing codes to NaN"""
+        missing_values = ['None', '-999', '', 'NaN', None]
+        self.df.replace(missing_values, np.nan, inplace=True)
 
 
     # -----------------------
@@ -168,6 +235,19 @@ class RedcapProcessor:
         patient_demo = patient_rows[self.metadata_cols].apply(
             lambda col: col.dropna().iloc[0] if col.dropna().any() else None
         )
+
+        
+        # --- Add Pre_op_doac ---
+        medication = self.medications.get(patient_demo["StudyID"], None)
+        patient_demo["Pre_op_doac"] = medication
+
+
+        patient_demo["VTE_type"] = self.vte_type_map.get(patient_demo["StudyID"], None)
+
+        
+
+        
+
         return patient_demo
     
     # -----------------------
@@ -200,8 +280,8 @@ class RedcapProcessor:
         if self.df is None:
             raise ValueError("Data not loaded. Run fetch_and_process() first.")
 
-        # Only keep StudyID, Draw_date, and lab columns
-        cols = ['StudyID', 'Draw_date'] + self.lab_cols
+        # Only Draw_date, and lab columns
+        cols = ['Draw_date'] + self.lab_cols
         blood_draws = self.df[cols].dropna(subset=['Draw_date']).reset_index(drop=True)
 
         return blood_draws
@@ -215,8 +295,9 @@ class RedcapProcessor:
         for record in self.records.values():
             demo = record.get_demographics().copy()
             demo['StudyID'] = record.study_id  # Ensure StudyID is included
+            demo['Pre_op_doac'] = self.medications.get(record.study_id, None)
+            demo["VTE_type"] = self.vte_type_map.get(record.study_id, None)
             all_demo.append(demo)
-
         return pd.DataFrame(all_demo)
     
 
