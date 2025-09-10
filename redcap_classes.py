@@ -58,7 +58,7 @@ class RedcapProcessor:
                      'Post Fracture Day 2','Post Frac Day 2','Day 2 Post fracture/Pre-Op','Day 2 Post #'],
             "PFD3": ['Day 3 post #','Post Frac Day 3'],
             "PFD4": ['Post Frac Day 4'],
-            "POD1": ['post op day 1','POD1','Day 1 post-op','PO Day 1','Day 1 Post-Op','POD 1','Day 1 post op',
+            "POD1": ['post op day 1','POD1','Day 1 post-op','PO Day 1','Day 1 Post-Op','POD 1','POD 1 ','Day 1 post op',
                      'Post Operative Day 1','Day 1 Post-op','Day 1 post o','Postoperative Day 1','Pod 1'],
             "POD2": ['POD 2','POD2','Day 2 post-op','Day 2 Post-Op','Day 2 post op','PO Day 2','Day 2 Post-op',
                      'Post Operative Day 2','Day  2 post-op'],
@@ -66,22 +66,20 @@ class RedcapProcessor:
                      'Day 3 Post-op','Day 3 pot-op','Day 3 PO'],
             "POD4": ['POD 4','Day 4 post-op','Day 4 Post-Op','PO Day 4','Day 4 post op','Day 4 Post-op'],
             "POD5": ['pod 5','POD5','POD 5','Day 5 post-op','PO Day 5','Day 5 Post-Op','Day 5 post op','Day 5 Post-op',
-                     'Day 5 po','Post Operative Day 5'],
+                     'Day 5 po','Post Operative Day 5','POD 5 '],
             "POD7": ['POD7','POD 7','PO Day 7','Post Operative Day 7','pod 7'],
             "Week2": ['2 week','2 Week FU','2 weeks follow up','2-Week','2 weeks','2 Week','2weeks','2 Week F/U',
-                      '2 week F/U','2 week follow-up','2-week','2 Week PO','2 week post#'],
+                      '2 week F/U','2 week follow-up','2-week','2 Week PO','2 week post#','2 weeks '],
             "Week4": ['4 week','4 Week FU','4 weeks','4 weeks follow up','4-Week','4weeks','4 WEEKS FOLLOW UP',
-                      '4 weeks f/u','4 week follow up'],
+                      '4 weeks f/u','4 week follow up','4 week '],
             "Week6": ['6 week','6 weeks follow up','6 Week FU','6weeks','6 weeks','6-Week','6 Week','6 Week F/U',
-                      '6 week F/U','6-week','6 week post op','6 week follow up','6 Week Follow Up'],
+                      '6 week F/U','6-week','6 week post op','6 week follow up','6 Week Follow Up','6 weeks '],
             "Month3": ['3 month','3 Month Follow Up','3 months follow up','3 months','3 Month FU','3months',
                        '3 month follow up','3-Month','3 Month F/U','3 Month','3  month','3-month','3 month f/u',
                        'unscheduled 3 months follow up','12 weeks'],
             "Month6": ['6 months']
         }
 
-
-        self.sex_dict = {'1':'Male', '2':'Female'}
 
         self.medications = {
             **dict.fromkeys(
@@ -91,8 +89,8 @@ class RedcapProcessor:
             'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036', 'HPA-038',
             'HPA-039', 'HPA-042', 'HPA-043', 'TH-004', 'TH-010', 'TH-075',
             'TH-088', 'TH-101', 'TH-110', 'TH-162', 'TH-170', 'TH-194',
-            'TH-198', 'TH-212', 'TH-217', 'TH-225', 'TH-226', 'TH-236',
-            'TH-240', 'TH-244', 'TH-255', 'TH-262', 'TH-267', 'TH-274',
+            'TH-198', 'TH-212', 'TH-217', 'TH-225', 'TH-226', 'TH-227','TH-236',
+            'TH-240', 'TH-255', 'TH-262', 'TH-267', 'TH-274',
             'TH-284', 'TH-286', 'TH-290', 'TH-302'], "OAC")
         }
 
@@ -118,8 +116,9 @@ class RedcapProcessor:
 
     def fetch_and_process(self):
         # Step 1: Export REDCap records
-        records_data = self.project.export_records()
+        records_data = self.project.export_records(raw_or_label='label')
         df = pd.DataFrame(records_data)
+        # display(df)
 
         # Step 2: Replace empty strings with NaN
         df = df.replace(r'^\s*$', np.nan, regex=True)
@@ -131,9 +130,6 @@ class RedcapProcessor:
                 if k in df.columns:
                     col_mapping[k] = standard_name
         df = df.rename(columns=col_mapping)
-
-
-        
 
         # --- Step 4: Assign to self.df BEFORE replacing missing values ---
         self.df = df
@@ -153,11 +149,38 @@ class RedcapProcessor:
                 df['StudyID'] = df['StudyID'].replace('nan', np.nan)
                 df['StudyID'] = df.groupby('record_id')['StudyID'].ffill().bfill()
         
-            df = df[df['screening_status'].astype(str).str.strip() == '1']
+            df = df[df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled']
 
-        if 'teg_time' in df.columns and 'Draw_date' in df.columns:
-            df['Draw_date'] = pd.to_datetime(df['Draw_date'].astype(str) + ' ' + df['teg_time'].astype(str),
-            errors='coerce')
+     
+        # if 'Draw_date' in df.columns:
+        #     # Ensure teg_time exists; if not, create a column of NaNs
+        #     if 'teg_time' not in df.columns:
+        #         df['teg_time'] = pd.NA
+
+        #     # Fill missing teg_time with midnight
+        #     df['teg_time'] = df['teg_time'].fillna('00:00').astype(str)
+
+        #     # Only combine when Draw_date is not missing
+        #     df['Draw_date'] = pd.to_datetime(
+        #         df['Draw_date'].astype(str) + ' ' + df['teg_time'],
+        #         errors='coerce'
+        #     )
+        if 'Draw_date' in df.columns:
+            # Ensure teg_time exists; if not, create a column of NaNs
+            if 'teg_time' not in df.columns:
+                df['teg_time'] = pd.NA
+
+            # Fill missing teg_time with midnight
+            df['teg_time'] = df['teg_time'].fillna('00:00').astype(str)
+
+            # Use Draw_date if available, otherwise fall back to lab_date_visit (or NA)
+            draw_dates = df['Draw_date'].combine_first(
+                df['lab_date_visit'] if 'lab_date_visit' in df.columns else pd.Series([pd.NA]*len(df))
+            )
+
+            # Convert to datetime
+            df['Draw_date'] = pd.to_datetime(draw_dates.astype(str) + ' ' + df['teg_time'], errors='coerce')
+
 
         if 'adm_injury_time' in df.columns and 'Injury_date' in df.columns:
             df['Injury_date'] = pd.to_datetime(df['Injury_date'].astype(str) + ' ' + df['adm_injury_time'].astype(str),
@@ -169,20 +192,13 @@ class RedcapProcessor:
 
 
 
-
-
-
-
-
-            
-
         # Step 5: Standardize timepoints
         if 'Time' in df.columns:
             df['Time'] = df['Time'].apply(self._map_timepoint)
 
 
-        if 'Sex' in df.columns:
-            df['Sex'] = df['Sex'].map(self.sex_dict).astype(object)
+        # if 'Sex' in df.columns:
+        #     df['Sex'] = df['Sex'].map(self.sex_dict).astype(object)
             
             
 
@@ -254,37 +270,29 @@ class RedcapProcessor:
     # Get patient blood draws
     # -----------------------
 
-    def get_patient_blood_draws(self, patient_id):
-        if self.df is None:
-            raise ValueError("Data not loaded. Run fetch_and_process() first.")
-
-        patient_rows = self.df[self.df['StudyID'] == patient_id]
-
-        if patient_rows.empty:
-            return pd.DataFrame()  # return empty DataFrame if patient not found
-
-        # Only keep metadata + lab columns
-        cols = ['Draw_date'] + self.lab_cols
-        # Some Draw_date values may be NaN, drop those rows
-        blood_draws = patient_rows[cols].dropna(subset=['Draw_date'])
-
-        # Optional: reset index
-        blood_draws = blood_draws.reset_index(drop=True)
-        return blood_draws
-    
+    def get_patient_blood_draws(self, study_id):
+        rec = self.records.get(study_id)
+        if not rec:
+            return pd.DataFrame()
+        rows = []
+        for bd in rec.blood_draws:
+            row = {"StudyID": rec.study_id}
+            row.update(bd.labs)
+            rows.append(row)
+        return pd.DataFrame(rows)
+       
 
     # -----------------------
     # Get all blood draws for all patients
     # -----------------------
     def get_all_blood_draws(self):
-        if self.df is None:
-            raise ValueError("Data not loaded. Run fetch_and_process() first.")
-
-        # Only Draw_date, and lab columns
-        cols = ['Draw_date'] + self.lab_cols
-        blood_draws = self.df[cols].dropna(subset=['Draw_date']).reset_index(drop=True)
-
-        return blood_draws
+        all_draws = []
+        for rec in self.records.values():
+            for bd in rec.blood_draws:
+                row = {"StudyID": rec.study_id}
+                row.update(bd.labs)
+                all_draws.append(row)
+        return pd.DataFrame(all_draws)
     
     # -----------------------
     # Get all demographics for all patients
@@ -298,7 +306,14 @@ class RedcapProcessor:
             demo['Pre_op_doac'] = self.medications.get(record.study_id, None)
             demo["VTE_type"] = self.vte_type_map.get(record.study_id, None)
             all_demo.append(demo)
-        return pd.DataFrame(all_demo)
+
+            df_demo = pd.DataFrame(all_demo)
+            df_demo['VTE'] = np.where(df_demo['VTE_type'].isnull(), 'No', 'Yes')
+            df_demo=df_demo.replace({'Participant Withdrawn': np.nan})
+            df_demo['Pre_op_doac']=df_demo['Pre_op_doac'].replace({None: 'Non_DOAC'})
+
+
+        return df_demo
     
 
 
@@ -312,15 +327,18 @@ class RedcapProcessor:
             )
             demo_dict = demo.to_dict()
 
-            # Blood draws
             blood_draws = []
             for _, row in rows.iterrows():
-                bd_data = row[self.lab_cols].dropna().to_dict()
-                if bd_data:
-                    blood_draws.append(BloodDraw(bd_data))
+                if pd.notnull(row.get("Draw_date")):
+                    bd_data = row[self.lab_cols].to_dict()
+                    bd_data["Draw_date"] = row["Draw_date"]
+                    blood_draws.append(BloodDraw(row["Draw_date"], **bd_data))
 
             # Save Record
-            self.records[study_id] = Record(study_id, demographics=demo_dict, blood_draws=blood_draws)
+            # self.records[study_id] = Record(study_id, demographics=demo_dict, blood_draws=blood_draws)
+            rec = Record(study_id, demographics=demo_dict, blood_draws=blood_draws)
+            rec.add_time_differences()  # <-- calculate once per patient
+            self.records[study_id] = rec
 
     
 # -----------------------
@@ -347,6 +365,19 @@ class Record:
 
     def add_blood_draw(self, blood_draw):
         self.blood_draws.append(blood_draw)
+
+    def add_time_differences(self):
+        """Attach time from injury → draw for each blood draw, safely."""
+        injury_date = pd.to_datetime(self.demographics.get("Injury_date", None), errors="coerce")
+
+        if pd.notnull(injury_date):
+            for bd in self.blood_draws:
+                draw_date = pd.to_datetime(bd.labs.get("Draw_date", None), errors="coerce")
+                if pd.notnull(draw_date):
+                    delta = draw_date - injury_date
+                    bd.labs["time_from_injury_to_draw_hours"] = delta.total_seconds() / 3600
+                    
+
 
     def __repr__(self):
         return f"<Record {self.study_id}: {len(self.blood_draws)} blood draws>"
