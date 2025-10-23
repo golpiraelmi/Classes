@@ -360,7 +360,6 @@ class RedcapProcessor:
             raise ValueError("Data not loaded. Run fetch_and_process() first.")
 
         patient_rows = self.df[self.df['StudyID'] == patient_id]
-
         if patient_rows.empty:
             return None
 
@@ -369,74 +368,47 @@ class RedcapProcessor:
             lambda col: col.dropna().iloc[0] if col.dropna().any() else None
         )
 
-        # --- Add Pre_op_doac ---
+        # --- Pre-op DOAC ---
         medication = self.medications.get(patient_demo["StudyID"], None)
-        patient_demo["Pre_op_doac"] = medication
-
-        patient_demo['Pre_op_doac'] = patient_demo['Pre_op_doac'] if patient_demo['Pre_op_doac'] is not None else 'No'
-
-        # patient_demo['Treatment']=patient_demo['Treatment'].map(self.arth_fix)
-
-        # Replace 'NoData' if present
+        patient_demo["Pre_op_doac"] = medication if medication is not None else 'No'
         if patient_demo['Pre_op_doac'] == 'NoData':
-            patient_demo['Pre_op_doac'] = np.nan 
-        
-        # patient_demo["VTE_type"] = self.vte_type_map.get(patient_demo["StudyID"], None)
-        patient_demo['Injury_date']=pd.to_datetime(patient_demo['Injury_date'], errors="coerce")
-        patient_demo['Surgery_date']=pd.to_datetime(patient_demo['Surgery_date'], errors="coerce")
+            patient_demo['Pre_op_doac'] = np.nan
 
+        # Dates
+        patient_demo['Injury_date'] = pd.to_datetime(patient_demo['Injury_date'], errors="coerce")
+        patient_demo['Surgery_date'] = pd.to_datetime(patient_demo['Surgery_date'], errors="coerce")
 
-        dvt_val = str(patient_demo.get('DVT', '')).strip().lower()
-        patient_demo['DVT'] = 'DVT' if dvt_val in ['yes', 'checked', 'true'] else 'No'
+        # ---- Determine DVT/PE/SVT ----
+        def flag_event(column_name):
+            if column_name in patient_rows.columns:
+                checked = patient_rows[column_name].astype(str).str.strip().str.lower() == 'checked'
+                return 'Yes' if checked.any() else 'No'
+            return 'No'
 
-        pe_val = str(patient_demo.get('PE', '')).strip().lower()
-        patient_demo['PE'] = 'PE' if pe_val in ['yes', 'checked', 'true'] else 'No'
+        patient_demo['DVT'] = 'DVT' if flag_event('outcomes_vte_type___1') == 'Yes' else 'No'
+        patient_demo['PE']  = 'PE'  if flag_event('outcomes_vte_type___2') == 'Yes' else 'No'
+        patient_demo['SVT'] = 'SVT' if flag_event('outcomes_vte_type___3') == 'Yes' else 'No'
 
+        # ---- Construct VTE_type dynamically ----
+        if patient_demo['DVT'] == 'DVT' and patient_demo['PE'] == 'PE':
+            patient_demo['VTE_type'] = 'Both'
+        elif patient_demo['DVT'] == 'DVT':
+            patient_demo['VTE_type'] = 'DVT'
+        elif patient_demo['PE'] == 'PE':
+            patient_demo['VTE_type'] = 'PE'
+        else:
+            patient_demo['VTE_type'] = None
 
-
-        if 'outcomes_vte_type___1' in self.df.columns:
-            dvt_flags = (
-                self.df.loc[self.df['outcomes_vte_type___1'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
-                .unique()
-            )
-            patient_demo.loc[patient_demo['StudyID'].isin(dvt_flags), 'DVT'] = 'DVT'
-        
-        if 'outcomes_vte_type___2' in self.df.columns:
-            pe_flags = (
-                self.df.loc[self.df['outcomes_vte_type___2'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
-                .unique()
-            )
-            patient_demo.loc[patient_demo['StudyID'].isin(pe_flags), 'PE'] = 'PE'
-
-
-        if 'outcomes_vte_type___3' in self.df.columns:
-            pe_flags = (
-                self.df.loc[self.df['outcomes_vte_type___3'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
-                .unique()
-            )
-            patient_demo.loc[patient_demo['StudyID'].isin(pe_flags), 'SVT'] = 'SVT'
-
-
-         # ---- Construct VTE_type dynamically ----
-        def classify_vte(row):
-            if row['DVT'] == 'DVT' and row['PE'] == 'PE':
-                return 'Both'
-            elif row['DVT'] == 'DVT':
-                return 'DVT'
-            elif row['PE'] == 'PE':
-                return 'PE'
-            else:
-                return None
-
-        patient_demo['VTE_type'] = classify_vte(patient_demo)
-
-
-        # ---- Add a simple Yes/No VTE summary column ----
+        # ---- Add simple Yes/No VTE summary ----
         patient_demo['VTE'] = 'Yes' if patient_demo['VTE_type'] is not None else 'No'
 
+        # ---- Time from injury to surgery ----
+        patient_demo['time_injury_to_surgery_hours'] = (
+            patient_demo['Surgery_date'] - patient_demo['Injury_date']
+        ).total_seconds() / 3600 if pd.notnull(patient_demo['Surgery_date']) and pd.notnull(patient_demo['Injury_date']) else np.nan
 
-        patient_demo['time_injury_to_surgery_hours']=(patient_demo['Surgery_date']-patient_demo['Injury_date']).total_seconds() / 3600
         return patient_demo
+
     
     # ------------------------------------------------------------------------------
     # Get all demographics for all patients
@@ -448,7 +420,6 @@ class RedcapProcessor:
             demo = record.get_demographics().copy()
             demo['StudyID'] = record.study_id  # Ensure StudyID is included
             demo['Pre_op_doac'] = self.medications.get(record.study_id, None)
-            # demo["VTE_type"] = self.vte_type_map.get(record.study_id, None)
             all_demo.append(demo)
 
         # Build main demographics dataframe
@@ -534,23 +505,39 @@ class RedcapProcessor:
     # ------------------------------------------------------------------------------
     # Get all blood draws for all patients
     # ------------------------------------------------------------------------------
+   
     def get_all_blood_draws(self):
         all_draws = []
         for rec in self.records.values():
             for bd in rec.blood_draws:
                 row = {"StudyID": rec.study_id}
                 row.update(bd.labs)
-                # Add VTE_type and Pre_op_doac
-                row["VTE_type"] = self.vte_type_map.get(rec.study_id, None)
-                row["Pre_op_doac"] = self.medications.get(rec.study_id, None)
+
+                # Get Pre_op_doac
+                row["Pre_op_doac"] = self.medications.get(rec.study_id, 'No')
+
+                # Dynamically determine DVT/PE flags from blood_draws or demographics
+                demo = rec.get_demographics()
+                dvt_flag = demo.get('DVT', 'No')
+                pe_flag  = demo.get('PE', 'No')
+
+                # Construct VTE_type
+                if dvt_flag == 'DVT' and pe_flag == 'PE':
+                    row['VTE_type'] = 'Both'
+                elif dvt_flag == 'DVT':
+                    row['VTE_type'] = 'DVT'
+                elif pe_flag == 'PE':
+                    row['VTE_type'] = 'PE'
+                else:
+                    row['VTE_type'] = 'No'
+
+                # Optional: simple Yes/No VTE column
+                row['VTE'] = 'Yes' if row['VTE_type'] in ['DVT', 'PE', 'Both'] else 'No'
+
                 all_draws.append(row)
+
         df_all = pd.DataFrame(all_draws)
-        # Optional: replace None with more readable labels
-        df_all["Pre_op_doac"] = df_all["Pre_op_doac"].replace({None: "No"})
-        df_all["VTE_type"] = df_all["VTE_type"].replace({None: "No"})
         return df_all
-
-
    
 
     
