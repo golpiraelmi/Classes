@@ -1,6 +1,7 @@
 
 import pandas as pd
 import numpy as np
+import re
 from redcap import Project
 
 
@@ -15,10 +16,10 @@ class RedcapProcessor:
 
         # ---- Column replacement dictionary ----
         self.replacement_dict = {
-            ("patient_id", "screen_patient_id"): "StudyID",
+            ("patient_id", "record_id"): "StudyID",
             ("demo_age", "bl_age","baseline_age"): "Age",
             ("demo_sex", "bl_sex","baseline_sex"): "Sex",
-            ("bmi_calc", "bl_bmi_calc","baseline_bmi"): "BMI",
+            ("bmi_calc", "bl_bmi_calc","baseline_bmi","bl_bmi"): "BMI",
             ("bloodwork_hemoglobin", "lp_hemoglobin","blood_work_hemoglobin"): "Hemoglobin",
             ("bloodwork_creatinine", "lp_creatinine","blood_work_creatinine"): "Creatinine",
             ("bloodwork_teg_crt_r", "rteg_crt_rvalue","blood_work_teg_crt_r"): "R_time",
@@ -35,14 +36,17 @@ class RedcapProcessor:
             ("blood_work_teg_aa_ma",): "AA-ma",
             ("blood_products_rbc",): "rbc",
             ("lab_rteg_timepoint","bloodwork_timepoint","blood_work_timepoint"):'Time',
-            ('date_time_injury','adm_injury_date'):'Injury_date',
-            ('admission_date_time',): "Admission_date", 
-            ('surgery_date_time','intra_op_date','intraop_date_surg'):'Surgery_date',
-            
-
-
-
+            ('date_time_injury','adm_injury_date','date_injury'):'Injury_date',
+            ('admission_date_time','adm_er_date','adm_date'): "Admission_date", 
+            ('surgery_date_time','intra_op_date','intraop_date_surg','postop_dt_surg'):'Surgery_date',
             ('teg_date_time','lab_dt_blood_draw','teg_date'):'Draw_date',
+            ('aoota_classification','inj_aoota',):'AO_OTA',
+            ('comp_dvt_yn','complication_dvt',):'DVT',
+            ('comp_pe_yn','complication_pe',):'PE',
+            
+           
+            
+            
         }
 
         # ---- Timepoint dictionary ----
@@ -80,30 +84,56 @@ class RedcapProcessor:
             "Month6": ['6 months']
         }
 
-
+        ### PRE_OP_DOAC
         self.medications = {
             **dict.fromkeys(
-                ['HPA-001', 'HPA-004', 'HPA-008', 'HPA-009', 'HPA-010', 'HPA-012',
-            'HPA-014', 'HPA-015', 'HPA-016', 'HPA-017', 'HPA-019', 'HPA-020',
-            'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028', 'HPA-029',
-            'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036', 'HPA-038',
-            'HPA-039', 'HPA-042', 'HPA-043', 'TH-004', 'TH-010', 'TH-075',
-            'TH-088', 'TH-101', 'TH-110', 'TH-162', 'TH-170', 'TH-194',
-            'TH-198', 'TH-212', 'TH-217', 'TH-225', 'TH-226', 'TH-227','TH-236',
-            'TH-240', 'TH-255', 'TH-262', 'TH-267', 'TH-274',
-            'TH-284', 'TH-286', 'TH-290', 'TH-302'], "OAC")
+                ['HPA-001', 'HPA-004', 'HPA-008', 'HPA-009', 'HPA-010',
+                    'HPA-012', 'HPA-014', 'HPA-015', 'HPA-016', 'HPA-017', 'HPA-019',
+                    'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
+                    'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
+                    'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
+                    'TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
+                    'TH-225', 'TH-227', 'TH-236', 'TH-240', 'TH-244', 
+                    'TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
+                    'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "Yes"),
+                     **dict.fromkeys(['TH-110'], np.nan)
         }
 
 
-        self.vte_type_map = {**dict.fromkeys(
-            ["TH-003","TH-201","TH-227","TH-253","TH-264","TH-301"], "DVT"),
-            **dict.fromkeys(["TH-082","TH-088","TH-271","TH-292","HPA-028"], "PE"),
-            **dict.fromkeys(["TH-261","TH-279"], "Both")
-        }
+        self.arth_fix = {
+            **dict.fromkeys([
+                'Hemi-arthroplasty (monopolar, bipolar)/Other',
+                'total arthroplasty direct anterior approach depuy pinnacle actis',
+                'direct anterior approach: primary right hip arthroplasty - depuy actis',
+                'revision arthroplasty, hip, depuy corail',
+                'Total Hip Arthroplasty',
+                'Hemi-arthroplasty (monopolar, bipolar)',
+                'Hemi-arthroplasty'
+            ], 'Arthoplasty'),
 
+            **dict.fromkeys([
+                'Long cephalomedullary nail',
+                'Dynamic Hip Screw/Other',
+                'Short cephalomedullary nail',
+                'Dynamic Hip Screw',
+                'Cannulated Screws',
+                'Other',
+                'Short cephalomedullary nail/Dynamic Hip Screw',
+                'Short cephalomedullary nail/Other',
+                'Cannulated Screws/Short cephalomedullary nail'
+            ], 'Fixation')
+        }
+        
+
+
+        # self.vte_type_map = {**dict.fromkeys(
+        #     ["TH-003", "TH-201", "TH-227", "TH-253", "TH-264", "TH-301","TF-069", "TF-073", "TF-085", "TF-120","TPA-016", "TPA-030", "TPA-061", "TPA-095"], "DVT"),
+        #     **dict.fromkeys(["TH-082","TH-088","TH-271","TH-292","HPA-028","TF-022","TPA-010", "TPA-011", "TPA-019", "TPA-021","TPA-026", "TPA-036", "TPA-081"], "PE"),
+        #     **dict.fromkeys(["TH-261", "TH-279","TPA-001", "TPA-073", "TPA-097", "TPA-100"], "Both")
+        # }
 
         # ---- Define metadata and lab columns ----
-        self.metadata_cols = ['StudyID','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date']
+        self.metadata_cols = ['StudyID','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE']
         self.lab_cols = ['StudyID','Time','Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA','LY30', 'ACT']
         
         # Placeholder for processed DataFrame
@@ -115,15 +145,18 @@ class RedcapProcessor:
     # -----------------------
 
     def fetch_and_process(self):
+        
         # Step 1: Export REDCap records
         records_data = self.project.export_records(raw_or_label='label')
         df = pd.DataFrame(records_data)
-        # display(df)
 
         # Step 2: Replace empty strings with NaN
         df = df.replace(r'^\s*$', np.nan, regex=True)
 
         # Step 3: Rename columns using replacement_dict
+        if 'screen_patient_id' in df.columns:
+            df=df.rename(columns= {'screen_patient_id':'StudyID', 'record_id':'index'})
+        
         col_mapping = {}
         for keys, standard_name in self.replacement_dict.items():
             for k in keys:
@@ -131,40 +164,60 @@ class RedcapProcessor:
                     col_mapping[k] = standard_name
         df = df.rename(columns=col_mapping)
 
-        # --- Step 4: Assign to self.df BEFORE replacing missing values ---
-        self.df = df
+        if 'StudyID' in df.columns:
+            studyid_upper = df['StudyID'].astype(str).str.upper()
+
+            to_remove_reasons = {
+                'TH-226': 'Treated non-operatively',
+                'HPA-048': 'Excluded just to match my numbers to past reports',
+                'HPA-050': 'Excluded just to match my numbers to past reports',
+                'TPA-019': 'Multiple Surgery Patient',
+                'TPA-028': 'Multiple Surgery Patient',
+                'TPA-043': 'Multiple Surgery Patient',
+                'TPA-048': 'Multiple Surgery Patient',
+                'TPA-056': 'Multiple Surgery Patient',
+                'TPA-079': 'Multiple Surgery Patient'
+            }
+
+            to_remove = list(to_remove_reasons.keys())
+
+            present_to_remove = df['StudyID'].isin(to_remove) | df['StudyID'].str.startswith('TPANO')
+
+            if present_to_remove.any():
+                found_ids = df.loc[present_to_remove, 'StudyID'].unique()
+                
+                print("Removing the following StudyIDs from dataset:")
+                for sid in found_ids:
+                    reason = to_remove_reasons.get(sid, 'Excluded - Non-Operative Arm')
+                    print(f" - {sid}: {reason}")
+                
+                df = df[~present_to_remove].copy()
 
 
-        self._replace_missing_values()
+        
+
+
+
+        if 'index' in df.columns:
+            df['index'] = df['index'].astype(str).str.strip()
+            df['StudyID'] = df['StudyID'].replace('nan', np.nan)
+            df['StudyID'] = df.groupby('index')['StudyID'].ffill().bfill()
 
         # Step 4: Filter by screening_status (if column exists)
         if 'screening_status' in df.columns:
-            
             df['StudyID'] = df['StudyID'].astype(str)
-            df['StudyID'] = df.groupby('record_id')['StudyID'].ffill().bfill()
-            df['screening_status'] = df.groupby('record_id')['screening_status'].ffill().bfill()
-
-            if 'record_id' in df.columns:
-                df['record_id'] = df['record_id'].astype(str).str.strip()
-                df['StudyID'] = df['StudyID'].replace('nan', np.nan)
-                df['StudyID'] = df.groupby('record_id')['StudyID'].ffill().bfill()
-        
+            df['StudyID'] = df.groupby('index')['StudyID'].ffill().bfill()
+            df['screening_status'] = df.groupby('index')['screening_status'].ffill().bfill()
             df = df[df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled']
 
-     
-        # if 'Draw_date' in df.columns:
-        #     # Ensure teg_time exists; if not, create a column of NaNs
-        #     if 'teg_time' not in df.columns:
-        #         df['teg_time'] = pd.NA
+        
 
-        #     # Fill missing teg_time with midnight
-        #     df['teg_time'] = df['teg_time'].fillna('00:00').astype(str)
 
-        #     # Only combine when Draw_date is not missing
-        #     df['Draw_date'] = pd.to_datetime(
-        #         df['Draw_date'].astype(str) + ' ' + df['teg_time'],
-        #         errors='coerce'
-        #     )
+        # --- Step 4: Assign to self.df and replacing missing values ---
+        self.df = df
+
+        self._replace_missing_values()
+        
         if 'Draw_date' in df.columns:
             # Ensure teg_time exists; if not, create a column of NaNs
             if 'teg_time' not in df.columns:
@@ -186,21 +239,56 @@ class RedcapProcessor:
             df['Injury_date'] = pd.to_datetime(df['Injury_date'].astype(str) + ' ' + df['adm_injury_time'].astype(str),
             errors='coerce')
 
+        if 'time_injury' in df.columns and 'Injury_date' in df.columns:
+            df['Injury_date'] = pd.to_datetime(df['Injury_date'].astype(str) + ' ' + df['time_injury'].astype(str),
+            errors='coerce')
+
         if 'intraop_time_surg' in df.columns and 'Surgery_date' in df.columns:
             df['Surgery_date'] = pd.to_datetime(df['Surgery_date'].astype(str) + ' ' + df['intraop_time_surg'].astype(str),
             errors='coerce')
 
+        if {'ota_type_61', 'ota_type_62'}.issubset(df.columns):
+            df['AO_OTA'] = (df[['ota_type_61', 'ota_type_62']].apply(lambda x: '/'.join(x.dropna().astype(str)), axis=1).replace('', np.nan))
+
+        if 'complication_dvt' in df.columns:
+            df['DVT'] = np.where(df['complication_dvt']=='Yes','DVT','No')
+
+        if 'complication_pe' in df.columns:
+            df['PE'] = np.where(df['complication_pe']=='Yes','PE','No')
+
+        
 
 
+
+
+
+
+        treatment_map = {
+            'intra_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
+            'intra_treatment___2': 'Total Hip Arthroplasty',
+            'intra_treatment___3': 'Cannulated Screws',
+            'intra_treatment___4': 'Short cephalomedullary nail',
+            'intra_treatment___5': 'Long cephalomedullary nail',
+            'intra_treatment___6': 'Dynamic Hip Screw',
+            'intra_treatment___7': 'Other'
+        }
+
+        checkbox_cols = list(treatment_map.keys())
+
+        if set(checkbox_cols).issubset(df.columns):
+            def map_checked_values(row):
+                # Only include the treatment if the checkbox is checked (1)
+                checked = [treatment_map[col] for col in checkbox_cols if row[col] == 'Checked']
+                return '/'.join(checked) if checked else np.nan
+            
+            df['intra_treatment'] = df.apply(map_checked_values, axis=1)
+            df['intra_treatment'] = df.groupby('StudyID')['intra_treatment'].ffill().bfill()
+            df['Treatment'] = df['intra_treatment'].map(self.arth_fix)
+        
+        
         # Step 5: Standardize timepoints
         if 'Time' in df.columns:
             df['Time'] = df['Time'].apply(self._map_timepoint)
-
-
-        # if 'Sex' in df.columns:
-        #     df['Sex'] = df['Sex'].map(self.sex_dict).astype(object)
-            
-            
 
         # Step 6: Ensure all metadata columns exist
         for col in self.metadata_cols:
@@ -208,15 +296,18 @@ class RedcapProcessor:
                 df[col] = np.nan
 
         # Step 7: Save the processed DataFrame
-        self.df = df
+        print(df['StudyID'].nunique())
 
         # Step 8: Build Record objects
         self._build_records()
 
         return self.df
 
+
+    
+
     # -----------------------
-    # Map timepoints
+    # Replace Missing Values
     # -----------------------
     def _replace_missing_values(self):
         """Convert common REDCap missing codes to NaN"""
@@ -234,93 +325,14 @@ class RedcapProcessor:
             if tp in variants:
                 return standard
         return tp
-
-    # -----------------------
-    # Get demographics for a patient
-    # -----------------------
-    def get_patient_demographics(self, patient_id):
-        if self.df is None:
-            raise ValueError("Data not loaded. Run fetch_and_process() first.")
-
-        patient_rows = self.df[self.df['StudyID'] == patient_id]
-
-        if patient_rows.empty:
-            return None
-
-        # Take first non-null value for each metadata column
-        patient_demo = patient_rows[self.metadata_cols].apply(
-            lambda col: col.dropna().iloc[0] if col.dropna().any() else None
-        )
-
-        
-        # --- Add Pre_op_doac ---
-        medication = self.medications.get(patient_demo["StudyID"], None)
-        patient_demo["Pre_op_doac"] = medication
-
-
-        patient_demo["VTE_type"] = self.vte_type_map.get(patient_demo["StudyID"], None)
-
-        
-
-        
-
-        return patient_demo
     
     # -----------------------
-    # Get patient blood draws
+    # Build records
     # -----------------------
-
-    def get_patient_blood_draws(self, study_id):
-        rec = self.records.get(study_id)
-        if not rec:
-            return pd.DataFrame()
-        rows = []
-        for bd in rec.blood_draws:
-            row = {"StudyID": rec.study_id}
-            row.update(bd.labs)
-            rows.append(row)
-        return pd.DataFrame(rows)
-       
-
-    # -----------------------
-    # Get all blood draws for all patients
-    # -----------------------
-    def get_all_blood_draws(self):
-        all_draws = []
-        for rec in self.records.values():
-            for bd in rec.blood_draws:
-                row = {"StudyID": rec.study_id}
-                row.update(bd.labs)
-                all_draws.append(row)
-        return pd.DataFrame(all_draws)
-    
-    # -----------------------
-    # Get all demographics for all patients
-    # -----------------------
-    def get_all_demographics(self):
-    
-        all_demo = []
-        for record in self.records.values():
-            demo = record.get_demographics().copy()
-            demo['StudyID'] = record.study_id  # Ensure StudyID is included
-            demo['Pre_op_doac'] = self.medications.get(record.study_id, None)
-            demo["VTE_type"] = self.vte_type_map.get(record.study_id, None)
-            all_demo.append(demo)
-
-            df_demo = pd.DataFrame(all_demo)
-            df_demo['VTE'] = np.where(df_demo['VTE_type'].isnull(), 'No', 'Yes')
-            df_demo=df_demo.replace({'Participant Withdrawn': np.nan})
-            df_demo['Pre_op_doac']=df_demo['Pre_op_doac'].replace({None: 'Non_DOAC'})
-
-
-        return df_demo
-    
-
-
-
     def _build_records(self):
         self.records = {}
         for study_id, rows in self.df.groupby("StudyID"):
+
             # Demographics
             demo = rows[self.metadata_cols].apply(
                 lambda col: col.dropna().iloc[0] if col.dropna().any() else None
@@ -339,6 +351,207 @@ class RedcapProcessor:
             rec = Record(study_id, demographics=demo_dict, blood_draws=blood_draws)
             rec.add_time_differences()  # <-- calculate once per patient
             self.records[study_id] = rec
+
+    # ------------------------------------------------------------------------------
+    # Get demographics for a patient
+    # ------------------------------------------------------------------------------
+    def get_patient_demographics(self, patient_id):
+        if self.df is None:
+            raise ValueError("Data not loaded. Run fetch_and_process() first.")
+
+        patient_rows = self.df[self.df['StudyID'] == patient_id]
+
+        if patient_rows.empty:
+            return None
+
+        # Take first non-null value for each metadata column
+        patient_demo = patient_rows[self.metadata_cols].apply(
+            lambda col: col.dropna().iloc[0] if col.dropna().any() else None
+        )
+
+        # --- Add Pre_op_doac ---
+        medication = self.medications.get(patient_demo["StudyID"], None)
+        patient_demo["Pre_op_doac"] = medication
+
+        patient_demo['Pre_op_doac'] = patient_demo['Pre_op_doac'] if patient_demo['Pre_op_doac'] is not None else 'No'
+
+        # patient_demo['Treatment']=patient_demo['Treatment'].map(self.arth_fix)
+
+        # Replace 'NoData' if present
+        if patient_demo['Pre_op_doac'] == 'NoData':
+            patient_demo['Pre_op_doac'] = np.nan 
+        
+        # patient_demo["VTE_type"] = self.vte_type_map.get(patient_demo["StudyID"], None)
+        patient_demo['Injury_date']=pd.to_datetime(patient_demo['Injury_date'], errors="coerce")
+        patient_demo['Surgery_date']=pd.to_datetime(patient_demo['Surgery_date'], errors="coerce")
+
+
+        dvt_val = str(patient_demo.get('DVT', '')).strip().lower()
+        patient_demo['DVT'] = 'DVT' if dvt_val in ['yes', 'checked', 'true'] else 'No'
+
+        pe_val = str(patient_demo.get('PE', '')).strip().lower()
+        patient_demo['PE'] = 'PE' if pe_val in ['yes', 'checked', 'true'] else 'No'
+
+
+
+        if 'outcomes_vte_type___1' in self.df.columns:
+            dvt_flags = (
+                self.df.loc[self.df['outcomes_vte_type___1'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
+                .unique()
+            )
+            patient_demo.loc[patient_demo['StudyID'].isin(dvt_flags), 'DVT'] = 'DVT'
+        
+        if 'outcomes_vte_type___2' in self.df.columns:
+            pe_flags = (
+                self.df.loc[self.df['outcomes_vte_type___2'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
+                .unique()
+            )
+            patient_demo.loc[patient_demo['StudyID'].isin(pe_flags), 'PE'] = 'PE'
+
+
+        if 'outcomes_vte_type___3' in self.df.columns:
+            pe_flags = (
+                self.df.loc[self.df['outcomes_vte_type___3'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
+                .unique()
+            )
+            patient_demo.loc[patient_demo['StudyID'].isin(pe_flags), 'SVT'] = 'SVT'
+
+
+         # ---- Construct VTE_type dynamically ----
+        def classify_vte(row):
+            if row['DVT'] == 'DVT' and row['PE'] == 'PE':
+                return 'Both'
+            elif row['DVT'] == 'DVT':
+                return 'DVT'
+            elif row['PE'] == 'PE':
+                return 'PE'
+            else:
+                return None
+
+        patient_demo['VTE_type'] = classify_vte(patient_demo)
+
+
+        # ---- Add a simple Yes/No VTE summary column ----
+        patient_demo['VTE'] = 'Yes' if patient_demo['VTE_type'] is not None else 'No'
+
+
+        patient_demo['time_injury_to_surgery_hours']=(patient_demo['Surgery_date']-patient_demo['Injury_date']).total_seconds() / 3600
+        return patient_demo
+    
+    # ------------------------------------------------------------------------------
+    # Get all demographics for all patients
+    # ------------------------------------------------------------------------------
+    def get_all_demographics(self):
+        all_demo = []
+
+        for record in self.records.values():
+            demo = record.get_demographics().copy()
+            demo['StudyID'] = record.study_id  # Ensure StudyID is included
+            demo['Pre_op_doac'] = self.medications.get(record.study_id, None)
+            # demo["VTE_type"] = self.vte_type_map.get(record.study_id, None)
+            all_demo.append(demo)
+
+        # Build main demographics dataframe
+        df_demo = pd.DataFrame(all_demo)
+
+        # Replace withdrawn/missing data
+        df_demo = df_demo.replace({'Participant Withdrawn': np.nan})
+        # df_demo['VTE'] = np.where(df_demo['VTE_type'].isnull(), 'No', 'Yes')
+        df_demo['Pre_op_doac'] = df_demo['Pre_op_doac'].replace({None: 'No', 'NoData': np.nan})
+        
+        df_demo['DVT']=np.where(df_demo['DVT'].astype(str).str.strip().str.lower().isin(['yes','checked']), "DVT", 'No')
+        df_demo['PE']=np.where(df_demo['PE'].astype(str).str.strip().str.lower().isin(['yes','checked']), "PE", 'No')
+
+
+        if 'outcomes_vte_type___1' in self.df.columns:
+            dvt_flags = (
+                self.df.loc[self.df['outcomes_vte_type___1'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
+                .unique()
+            )
+            df_demo.loc[df_demo['StudyID'].isin(dvt_flags), 'DVT'] = 'DVT'
+        
+        if 'outcomes_vte_type___2' in self.df.columns:
+            pe_flags = (
+                self.df.loc[self.df['outcomes_vte_type___2'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
+                .unique()
+            )
+            df_demo.loc[df_demo['StudyID'].isin(pe_flags), 'PE'] = 'PE'
+
+
+        if 'outcomes_vte_type___3' in self.df.columns:
+            pe_flags = (
+                self.df.loc[self.df['outcomes_vte_type___3'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
+                .unique()
+            )
+            df_demo.loc[df_demo['StudyID'].isin(pe_flags), 'SVT'] = 'SVT'
+
+    
+
+        # ---- Construct VTE_type dynamically ----
+        def classify_vte(row):
+            if row['DVT'] == 'DVT' and row['PE'] == 'PE':
+                return 'Both'
+            elif row['DVT'] == 'DVT':
+                return 'DVT'
+            elif row['PE'] == 'PE':
+                return 'PE'
+            else:
+                return None
+
+        df_demo['VTE_type'] = df_demo.apply(classify_vte, axis=1)
+
+        # ---- Add a simple Yes/No VTE summary column ----
+        df_demo['VTE'] = np.where(df_demo['VTE_type'].isnull(), 'No', 'Yes')
+
+
+        # ---- Time calculations ----
+        df_demo['Injury_date'] = pd.to_datetime(df_demo['Injury_date'], errors="coerce")
+        df_demo['Surgery_date'] = pd.to_datetime(df_demo['Surgery_date'], errors="coerce")
+
+        df_demo['time_injury_to_surgery_hours'] = (
+            (df_demo['Surgery_date'] - df_demo['Injury_date']).dt.total_seconds() / 3600
+        )
+
+        return df_demo
+    
+    
+    # ------------------------------------------------------------------------------
+    # Get patient blood draws
+    # ------------------------------------------------------------------------------
+
+    def get_patient_blood_draws(self, study_id):
+        rec = self.records.get(study_id)
+        if not rec:
+            return pd.DataFrame()
+        rows = []
+        for bd in rec.blood_draws:
+            row = {"StudyID": rec.study_id}
+            row.update(bd.labs)
+            rows.append(row)
+        return pd.DataFrame(rows)
+       
+
+    # ------------------------------------------------------------------------------
+    # Get all blood draws for all patients
+    # ------------------------------------------------------------------------------
+    def get_all_blood_draws(self):
+        all_draws = []
+        for rec in self.records.values():
+            for bd in rec.blood_draws:
+                row = {"StudyID": rec.study_id}
+                row.update(bd.labs)
+                # Add VTE_type and Pre_op_doac
+                row["VTE_type"] = self.vte_type_map.get(rec.study_id, None)
+                row["Pre_op_doac"] = self.medications.get(rec.study_id, None)
+                all_draws.append(row)
+        df_all = pd.DataFrame(all_draws)
+        # Optional: replace None with more readable labels
+        df_all["Pre_op_doac"] = df_all["Pre_op_doac"].replace({None: "No"})
+        df_all["VTE_type"] = df_all["VTE_type"].replace({None: "No"})
+        return df_all
+
+
+   
 
     
 # -----------------------
