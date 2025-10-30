@@ -40,7 +40,8 @@ class RedcapProcessor:
             ('admission_date_time','adm_er_date','adm_date'): "Admission_date", 
             ('surgery_date_time','intra_op_date','intraop_date_surg','postop_dt_surg'):'Surgery_date',
             ('teg_date_time','lab_dt_blood_draw','teg_date','dt_blood_drawn','teg_run_date'):'Draw_date',
-            ('teg_run_time',):'teg_time',
+            ('teg_run_time','teg_time',):'teg_time',
+            ('teg_time_lab_panel',):'lab_time',
             ('aoota_classification','inj_aoota',):'AO_OTA',
             ('comp_dvt_yn','complication_dvt',):'DVT',
             ('comp_pe_yn','complication_pe',):'PE',
@@ -186,7 +187,8 @@ class RedcapProcessor:
 
         # ---- Define metadata and lab columns ----
         self.metadata_cols = ['StudyID','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE']
-        self.lab_cols = ['StudyID','Time','Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA','LY30', 'ACT']
+        self.lab_cols = ['StudyID', 'Time', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT', 'Injury_date', 'Draw_date_lab', 'Draw_date_teg']
+
         
         # Placeholder for processed DataFrame
         self.df = None
@@ -274,37 +276,73 @@ class RedcapProcessor:
         self._replace_missing_values()
 
         if 'Draw_date' in df.columns:
-            # Parse Draw_date safely
+            # --- Step 1: Parse Draw_date safely ---
             parsed_draw = pd.to_datetime(df['Draw_date'], errors='coerce')
 
-            # Determine if Draw_date includes a time (anything other than midnight)
+            # --- Step 2: Identify if Draw_date has a time (non-midnight) ---
             has_time = parsed_draw.dt.time.astype(str) != "00:00:00"
 
-            # Ensure teg_time exists
+            # --- Step 3: Ensure time columns exist ---
             if 'teg_time' not in df.columns:
                 df['teg_time'] = pd.NA
+            teg_exists = True
 
-            # Fill missing teg_time with midnight
+            # If lab_time missing entirely, mark flag
+            lab_time_exists = 'lab_time' in df.columns
+            if not lab_time_exists:
+                df['lab_time'] = pd.NA
+
+            # --- Step 4: Replace missing times with midnight ---
             df['teg_time'] = df['teg_time'].fillna('00:00').astype(str)
+            if lab_time_exists:
+                df['lab_time'] = df['lab_time'].astype(str)
+            else:
+                df['lab_time'] = df['lab_time'].fillna('00:00').astype(str)
 
-            # Fallback date if Draw_date is missing
-            fallback_dates = (
-                df['lab_date_visit']
-                if 'lab_date_visit' in df.columns
-                else pd.Series([pd.NA] * len(df), index=df.index)
-            )
+            # --- Step 5: Define fallback date (lab_date_visit if Draw_date missing) ---
+            if 'lab_date_visit' in df.columns:
+                fallback_dates = pd.to_datetime(df['lab_date_visit'], errors='coerce')
+            else:
+                fallback_dates = pd.Series([pd.NaT] * len(df), index=df.index)
 
-            # Combine logic:
-            df['draw_datetime'] = np.where(
+            # --- Step 6: Build Draw_date_teg ---
+            df['Draw_date_teg'] = np.where(
                 has_time,
-                df['Draw_date'],  # already includes time — keep as-is
-                fallback_dates.combine_first(df['Draw_date']).astype(str)
-                + " "
-                + df['teg_time']  # add time only when no time originally
+                parsed_draw.astype(str),
+                (
+                    fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d')
+                    + ' '
+                    + df['teg_time']
+                )
             )
 
-            # Convert final result to datetime
-            df['Draw_date'] = pd.to_datetime(df['draw_datetime'], errors='coerce')
+            # --- Step 7: Build Draw_date_lab ---
+            if lab_time_exists:
+                # If lab_time exists, only use it; leave NaT if missing
+                df['Draw_date_lab'] = np.where(
+                    has_time,
+                    parsed_draw.astype(str),
+                    np.where(
+                        df['lab_time'].notna() & (df['lab_time'] != 'NaT'),
+                        fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d') + ' ' + df['lab_time'],
+                        np.nan  # leave missing as NaT
+                    )
+                )
+            else:
+                # If lab_time column missing entirely → fallback to teg_time
+                df['Draw_date_lab'] = np.where(
+                    has_time,
+                    parsed_draw.astype(str),
+                    (
+                        fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d')
+                        + ' '
+                        + df['teg_time']
+                    )
+                )
+
+            # --- Step 8: Convert both to datetime ---
+            df['Draw_date_teg'] = pd.to_datetime(df['Draw_date_teg'], errors='coerce')
+            df['Draw_date_lab'] = pd.to_datetime(df['Draw_date_lab'], errors='coerce')
 
 
         if 'adm_injury_time' in df.columns and 'Injury_date' in df.columns:
@@ -691,10 +729,11 @@ class RedcapProcessor:
     # ------------------------------------------------------------------------------
     def get_all_blood_draws(self):
         all_draws = []
+
         for rec in self.records.values():
-            demo = rec.get_demographics()  # get patient-level info once
-            injury_date = demo.get('Injury_date', pd.NA)
-            surgery_date = demo.get('Surgery_date', pd.NA)
+            demo = rec.get_demographics()
+            injury_date = pd.to_datetime(demo.get('Injury_date', pd.NA), errors='coerce')
+            surgery_date = pd.to_datetime(demo.get('Surgery_date', pd.NA), errors='coerce')
             dvt_flag = demo.get('DVT', 'No')
             pe_flag  = demo.get('PE', 'No')
 
@@ -702,12 +741,28 @@ class RedcapProcessor:
                 row = {"StudyID": rec.study_id}
                 row.update(bd.labs)
 
+                # Ensure draw date columns exist
+                row['Draw_date_lab'] = row.get('Draw_date_lab', pd.NA)
+                row['Draw_date_teg'] = row.get('Draw_date_teg', pd.NA)
+
+                # Convert to datetime
+                draw_lab = pd.to_datetime(row['Draw_date_lab'], errors='coerce')
+                draw_teg = pd.to_datetime(row['Draw_date_teg'], errors='coerce')
+
+                # Compute hours from injury
+                row['injury_to_lab_hrs'] = ((draw_lab - injury_date).total_seconds()/3600) if pd.notnull(draw_lab) and pd.notnull(injury_date) else pd.NA
+                row['injury_to_teg_hrs'] = ((draw_teg - injury_date).total_seconds()/3600) if pd.notnull(draw_teg) and pd.notnull(injury_date) else pd.NA
+
+                # Compute hours from surgery
+                row['surgery_to_lab_hrs'] = ((draw_lab - surgery_date).total_seconds()/3600) if pd.notnull(draw_lab) and pd.notnull(surgery_date) else pd.NA
+                row['surgery_to_teg_hrs'] = ((draw_teg - surgery_date).total_seconds()/3600) if pd.notnull(draw_teg) and pd.notnull(surgery_date) else pd.NA
+
                 # Add patient-level info
                 row["Pre_op_doac"] = self.medications.get(rec.study_id, 'No')
                 row["Injury_date"] = injury_date
                 row["Surgery_date"] = surgery_date
 
-                # Construct VTE_type
+                # VTE type
                 if dvt_flag == 'DVT' and pe_flag == 'PE':
                     row['VTE_type'] = 'Both'
                 elif dvt_flag == 'DVT':
@@ -717,14 +772,13 @@ class RedcapProcessor:
                 else:
                     row['VTE_type'] = 'No'
 
-                # Optional: simple Yes/No VTE column
+                # Simple Yes/No VTE
                 row['VTE'] = 'Yes' if row['VTE_type'] in ['DVT', 'PE', 'Both'] else 'No'
 
                 all_draws.append(row)
 
-        df_all = pd.DataFrame(all_draws)
-        return df_all
-
+            df_all = pd.DataFrame(all_draws)
+            return df_all
     
 # -----------------------
 # BloodDraw and Record classes
@@ -752,27 +806,41 @@ class Record:
         self.blood_draws.append(blood_draw)
 
     def add_time_differences(self):
-        """Attach time from injury → draw for each blood draw, safely."""
+        """Compute hours from injury/surgery to TEG and LAB draw times."""
+    
+        # Convert demographic dates
         injury_date = pd.to_datetime(self.demographics.get("Injury_date", None), errors="coerce")
         surgery_date = pd.to_datetime(self.demographics.get("Surgery_date", None), errors="coerce")
 
-        if pd.notnull(injury_date):
-            for bd in self.blood_draws:
-                draw_date = pd.to_datetime(bd.labs.get("Draw_date", None), errors="coerce")
-                if pd.notnull(draw_date):
-                    delta = draw_date - injury_date
-                    bd.labs["injury_to_draw_hrs"] = delta.total_seconds() / 3600
+        for bd in self.blood_draws:
+            # Convert draw times if they exist
+            draw_date_lab = pd.to_datetime(bd.labs.get("Draw_date_lab"), errors="coerce")
+            draw_date_teg = pd.to_datetime(bd.labs.get("Draw_date_teg"), errors="coerce")
 
+            # Injury → LAB
+            if pd.notnull(injury_date) and pd.notnull(draw_date_lab):
+                bd.labs["injury_to_lab_hrs"] = (draw_date_lab - injury_date).total_seconds() / 3600
+            else:
+                bd.labs["injury_to_lab_hrs"] = np.nan
 
-        if pd.notnull(surgery_date):
-            for bd in self.blood_draws:
-                draw_date = pd.to_datetime(bd.labs.get("Draw_date", None), errors="coerce")
-                if pd.notnull(draw_date):
-                    delta = draw_date - surgery_date
-                    bd.labs["surgery_to_draw_hrs"] = delta.total_seconds() / 3600
-                    
+            # Injury → TEG
+            if pd.notnull(injury_date) and pd.notnull(draw_date_teg):
+                bd.labs["injury_to_teg_hrs"] = (draw_date_teg - injury_date).total_seconds() / 3600
+            else:
+                bd.labs["injury_to_teg_hrs"] = np.nan
+
+            # Surgery → LAB
+            if pd.notnull(surgery_date) and pd.notnull(draw_date_lab):
+                bd.labs["surgery_to_lab_hrs"] = (draw_date_lab - surgery_date).total_seconds() / 3600
+            else:
+                bd.labs["surgery_to_lab_hrs"] = np.nan
+
+            # Surgery → TEG
+            if pd.notnull(surgery_date) and pd.notnull(draw_date_teg):
+                bd.labs["surgery_to_teg_hrs"] = (draw_date_teg - surgery_date).total_seconds() / 3600
+            else:
+                bd.labs["surgery_to_teg_hrs"] = np.nan
 
 
     def __repr__(self):
         return f"<Record {self.study_id}: {len(self.blood_draws)} blood draws>"
-
