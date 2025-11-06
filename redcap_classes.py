@@ -43,14 +43,21 @@ class RedcapProcessor:
             ('teg_run_time','teg_time',):'teg_time',
             ('teg_time_lab_panel',):'lab_time',
             ('aoota_classification','inj_aoota',):'AO_OTA',
-            ('comp_dvt_yn','complication_dvt',):'DVT',
-            ('comp_pe_yn','complication_pe',):'PE',
+            ('comp_dvt_yn','complication_dvt','outcomes_vte_type___1'):'DVT',
+            ('comp_pe_yn','complication_pe','outcomes_vte_type___2'):'PE',
             ('reason_withdrawal','wd_reason','study_wd_reason'): 'Withdrawn',
-            ('outcomes_outcome_type___4','complication_death','comp_death_yn'):'comp_death'
-            
-           
-            
-            
+            ('outcomes_outcome_type___4','complication_death','comp_death_yn'):'comp_death',
+            ('diabetes','bl_comorbidity_check___1','bl_comorbidities___1',):'comorbidty_diabetes',
+            ('cancer','bl_comorbidity_check___2','bl_comorbidities___2',):'comorbidty_cancer',
+            ('cardiovascular','bl_comorbidity_check___3','bl_comorbidities___3',):'comorbidty_cardiovascular',
+            ('pulmonary','bl_comorbidity_check___4','bl_comorbidities___4',):'comorbidty_pulmonary',
+            ('prior_stroke','bl_comorbidity_check___5','bl_comorbidities___5',):'comorbidty_stroke',
+            ('current_smoker',):'comorbidty_current_smoker',
+
+
+            ('pulmonary_yesno','comp_pulmonary','comp_pulmonary_yn'): 'complication_pulmonary',
+            ('cardio_yesno','comp_cardio','comp_cardio_yn',): 'complication_cardiovascular',
+            ('infection_yesno','comp_infection','comp_infection_yn',): 'complication_infection',
         }
 
         # ---- Timepoint dictionary ----
@@ -145,6 +152,7 @@ class RedcapProcessor:
                     'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
                     'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
                     'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
+                    'HPA-051','HPA-052',
                     'TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
                     'TH-225', 'TH-227', 'TH-236', 'TH-240', 'TH-244', 
                     'TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
@@ -182,12 +190,13 @@ class RedcapProcessor:
         # self.vte_type_map = {**dict.fromkeys(
         #     ["TH-003", "TH-201", "TH-227", "TH-253", "TH-264", "TH-301","TF-069", "TF-073", "TF-085", "TF-120","TPA-016", "TPA-030", "TPA-061", "TPA-095"], "DVT"),
         #     **dict.fromkeys(["TH-082","TH-088","TH-271","TH-292","HPA-028","TF-022","TPA-010", "TPA-011", "TPA-019", "TPA-021","TPA-026", "TPA-036", "TPA-081"], "PE"),
-        #     **dict.fromkeys(["TH-261", "TH-279","TPA-001", "TPA-073", "TPA-097", "TPA-100"], "Both")
+        #     **dict.fromkeys(["TH-261", "TH-279","TF-027","TPA-001", "TPA-073", "TPA-097", "TPA-100"], "Both")
         # }
 
         # ---- Define metadata and lab columns ----
-        self.metadata_cols = ['StudyID','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE']
-        self.lab_cols = ['StudyID', 'Time', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT', 'Injury_date', 'Draw_date_lab', 'Draw_date_teg']
+        self.metadata_cols = ['StudyID','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
+                              'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection']
+        self.lab_cols = ['StudyID', 'Time', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg']
 
         
         # Placeholder for processed DataFrame
@@ -225,8 +234,9 @@ class RedcapProcessor:
                 'TH-226': 'Treated non-operatively',
                 # 'HPA-048': 'Excluded just to match my numbers to past reports',
                 # 'HPA-050': 'Excluded just to match my numbers to past reports',
-                'TF-070': 'Multiple Surgery Patient_TIMEPOINT_ISSUE',
-                'TF-084': 'Multiple Surgery Patient_TIMEPOINT_ISSUE',
+                'TF-070': 'Multiple Surgery Patient_bilateral femur fracture',
+                'TF-084': 'Multiple Surgery Patient_bilateral femur fracture',
+                'TF-115': 'Multiple Surgery Patient_bilateral femur fracture',
 
                 'TPA-019': 'Multiple Surgery Patient',
                 'TPA-028': 'Multiple Surgery Patient',
@@ -252,7 +262,8 @@ class RedcapProcessor:
 
 
         
-
+        if 'Admission_date' in df.columns:
+            df.loc[df['Admission_date'] == 'Participant Withdrawn', 'Admission_date'] = np.nan
 
 
         if 'index' in df.columns:
@@ -267,7 +278,35 @@ class RedcapProcessor:
             df['screening_status'] = df.groupby('index')['screening_status'].ffill().bfill()
             df = df[df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled']
 
-        
+        #### VTE/PE
+        for col in ['DVT', 'PE']:
+            # Convert to boolean: True if "Yes", False if "No" or missing
+            df[col + '_bool'] = df[col].eq('Yes')
+            
+            # Group by StudyID and check if any True exists
+            df[col] = df.groupby('StudyID')[col + '_bool'].transform('any')
+            
+            # Convert back to "Yes"/"No"
+            df[col] = df[col].map({True: 'Yes', False: 'No'})
+            
+            # Drop temporary column
+            df.drop(columns=[col + '_bool'], inplace=True)
+
+
+         # ---- Construct VTE_type dynamically ----
+        conditions = [(df['DVT'] == 'Yes') & (df['PE'] == 'Yes'),
+                      (df['DVT'] == 'Yes') & (df['PE'] != 'Yes'),
+                      (df['DVT'] != 'Yes') & (df['PE'] == 'Yes')
+                    ]
+
+        # Define corresponding values
+        choices = ['Both', 'DVT', 'PE']
+
+        # Apply to create VTE_type column
+        df['VTE_type'] = np.select(conditions, choices, default=None)
+
+        # Optional: VTE summary
+        df['VTE'] = np.where(df['VTE_type'].notnull(), 'Yes', 'No')
 
 
         # --- Step 4: Assign to self.df and replacing missing values ---
@@ -363,12 +402,13 @@ class RedcapProcessor:
         if 'complication_dvt' in df.columns:
             df['DVT'] = np.where(df['complication_dvt']=='Yes','DVT','No')
 
+
         if 'complication_pe' in df.columns:
             df['PE'] = np.where(df['complication_pe']=='Yes','PE','No')
 
 
         # Merge multiple timepoint columns into a single 'Time' column
-        timepoint_cols = ['teg_preop_tp', 'teg_postop_tp2', 'teg_fu_tp']
+        timepoint_cols = ['teg_preop_tp', 'teg_postop_tp1','teg_postop_tp2', 'teg_fu_tp','teg_timepoint']
         existing_timepoint_cols = [col for col in timepoint_cols if col in df.columns]
 
         if existing_timepoint_cols:
@@ -441,29 +481,60 @@ class RedcapProcessor:
             elif (group['Withdrawn'] == 'Withdrew').any():
                 df.loc[df['StudyID'] == study_id, 'Withdrawn'] = 'Withdrew'
 
+        # ---- Comorbidity and complications
+        if 'bl_tobacco' in df.columns:
+            df['comorbidty_current_smoker']=np.where(df['bl_tobacco']==1, 'Yes','No')
+        
+        df['comorbidty_current_smoker'] = df.groupby('StudyID')['comorbidty_current_smoker'].ffill().bfill()
+        
+        for comorb_comp in ['comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection']:
+            df[comorb_comp] = df.groupby('StudyID')[comorb_comp].ffill().bfill()
+            df[comorb_comp] = df[comorb_comp].replace({'Checked':'Yes','Unchecked':'No','Yes*':'Yes','Other':'Yes', None:'No', np.nan:'No'})
+            df[comorb_comp] = df.groupby('StudyID')[comorb_comp].ffill().bfill()
+
+
+  
+
 
 
         treatment_map = {
+            #Hip
             'intra_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
             'intra_treatment___2': 'Total Hip Arthroplasty',
             'intra_treatment___3': 'Cannulated Screws',
             'intra_treatment___4': 'Short cephalomedullary nail',
             'intra_treatment___5': 'Long cephalomedullary nail',
             'intra_treatment___6': 'Dynamic Hip Screw',
-            'intra_treatment___7': 'Other'
+            'intra_treatment___7': 'Other',
+
+            #Pathway
+            'intraop_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
+            'intraop_treatment___2': 'Total Hip Arthroplasty',
+            'intraop_treatment___3': 'Cannulated Screws',
+            'intraop_treatment___4': 'Short cephalomedullary nail',
+            'intraop_treatment___5': 'Long cephalomedullary nail',
+            'intraop_treatment___6': 'Dynamic Hip Screw',
+            'intraop_treatment___7': 'Other'
         }
-
-        checkbox_cols = list(treatment_map.keys())
-
-        if set(checkbox_cols).issubset(df.columns):
-            def map_checked_values(row):
-                # Only include the treatment if the checkbox is checked (1)
-                checked = [treatment_map[col] for col in checkbox_cols if row[col] == 'Checked']
+        def map_treatments(df, prefix):
+            cols = [c for c in df.columns if c.startswith(prefix)]
+            if not cols:
+                return pd.Series([np.nan] * len(df))
+            def mapper(row):
+                checked = [treatment_map[col] for col in cols if row.get(col) == 'Checked']
                 return '/'.join(checked) if checked else np.nan
-            
-            df['intra_treatment'] = df.apply(map_checked_values, axis=1)
-            df['intra_treatment'] = df.groupby('StudyID')['intra_treatment'].ffill().bfill()
-            df['Treatment'] = df['intra_treatment'].map(self.arth_fix)
+            return df.apply(mapper, axis=1)
+
+        df['intra_treatment'] = map_treatments(df, 'intra_treatment___')
+        df['intraop_treatment'] = map_treatments(df, 'intraop_treatment___')
+
+        # Fill both within each StudyID
+        df['intra_treatment'] = df.groupby('StudyID')['intra_treatment'].ffill().bfill()
+        df['intraop_treatment'] = df.groupby('StudyID')['intraop_treatment'].ffill().bfill()
+
+        # Prefer intra_treatment, but fallback to intraop_treatment
+        df['Treatment'] = df['intra_treatment'].combine_first(df['intraop_treatment'])
+        df['Treatment'] = df['Treatment'].map(self.arth_fix)
         
         
         # Step 5: Standardize timepoints
@@ -564,18 +635,6 @@ class RedcapProcessor:
         patient_demo['Injury_date'] = pd.to_datetime(patient_demo['Injury_date'], errors="coerce")
         patient_demo['Surgery_date'] = pd.to_datetime(patient_demo['Surgery_date'], errors="coerce")
 
-
-        # ---- Determine DVT/PE/SVT ----
-        def flag_event(column_name):
-            if column_name in patient_rows.columns:
-                checked = patient_rows[column_name].astype(str).str.strip().str.lower() == 'checked'
-                return 'Yes' if checked.any() else 'No'
-            return 'No'
-
-        patient_demo['DVT'] = 'DVT' if flag_event('outcomes_vte_type___1') == 'Yes' else 'No'
-        patient_demo['PE']  = 'PE'  if flag_event('outcomes_vte_type___2') == 'Yes' else 'No'
-        patient_demo['SVT'] = 'SVT' if flag_event('outcomes_vte_type___3') == 'Yes' else 'No'
-
         # ---- Determine Withdrawn / Death status ----
         if {'Withdrawn', 'Death'}.issubset(patient_rows.columns):
             # Take the first non-null value for each
@@ -585,23 +644,6 @@ class RedcapProcessor:
             patient_demo['Death'] = 'No'
             patient_demo['Withdrawn'] = 'No'
 
-        
-
-
-        
-
-        # ---- Construct VTE_type dynamically ----
-        if patient_demo['DVT'] == 'DVT' and patient_demo['PE'] == 'PE':
-            patient_demo['VTE_type'] = 'Both'
-        elif patient_demo['DVT'] == 'DVT':
-            patient_demo['VTE_type'] = 'DVT'
-        elif patient_demo['PE'] == 'PE':
-            patient_demo['VTE_type'] = 'PE'
-        else:
-            patient_demo['VTE_type'] = None
-
-        # ---- Add simple Yes/No VTE summary ----
-        patient_demo['VTE'] = 'Yes' if patient_demo['VTE_type'] is not None else 'No'
 
         # ---- Time from injury to surgery ----
         patient_demo['time_injury_to_surgery_hours'] = (
@@ -628,52 +670,10 @@ class RedcapProcessor:
 
         
         df_demo['Pre_op_doac'] = df_demo['Pre_op_doac'].replace({None: 'No', 'NoData': np.nan})
+
         
         df_demo['DVT']=np.where(df_demo['DVT'].astype(str).str.strip().str.lower().isin(['yes','checked']), "DVT", 'No')
         df_demo['PE']=np.where(df_demo['PE'].astype(str).str.strip().str.lower().isin(['yes','checked']), "PE", 'No')
-
-
-        if 'outcomes_vte_type___1' in self.df.columns:
-            dvt_flags = (
-                self.df.loc[self.df['outcomes_vte_type___1'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
-                .unique()
-            )
-            df_demo.loc[df_demo['StudyID'].isin(dvt_flags), 'DVT'] = 'DVT'
-        
-        if 'outcomes_vte_type___2' in self.df.columns:
-            pe_flags = (
-                self.df.loc[self.df['outcomes_vte_type___2'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
-                .unique()
-            )
-            df_demo.loc[df_demo['StudyID'].isin(pe_flags), 'PE'] = 'PE'
-
-
-        if 'outcomes_vte_type___3' in self.df.columns:
-            pe_flags = (
-                self.df.loc[self.df['outcomes_vte_type___3'].astype(str).str.strip().str.lower() == 'checked', 'StudyID']
-                .unique()
-            )
-            df_demo.loc[df_demo['StudyID'].isin(pe_flags), 'SVT'] = 'SVT'
-
-
-    
-
-        # ---- Construct VTE_type dynamically ----
-        def classify_vte(row):
-            if row['DVT'] == 'DVT' and row['PE'] == 'PE':
-                return 'Both'
-            elif row['DVT'] == 'DVT':
-                return 'DVT'
-            elif row['PE'] == 'PE':
-                return 'PE'
-            else:
-                return None
-
-        df_demo['VTE_type'] = df_demo.apply(classify_vte, axis=1)
-
-        # ---- Add a simple Yes/No VTE summary column ----
-        df_demo['VTE'] = np.where(df_demo['VTE_type'].isnull(), 'No', 'Yes')
-
 
        
         # ---- Withdrawn / Death status ----
@@ -711,16 +711,23 @@ class RedcapProcessor:
     # ------------------------------------------------------------------------------
     # Get patient blood draws
     # ------------------------------------------------------------------------------
-
     def get_patient_blood_draws(self, study_id):
         rec = self.records.get(study_id)
         if not rec:
             return pd.DataFrame()
+
+        demo = rec.get_demographics()
+        injury_date = demo.get('Injury_date', pd.NA)
+        surgery_date = demo.get('Surgery_date', pd.NA)
+
         rows = []
         for bd in rec.blood_draws:
             row = {"StudyID": rec.study_id}
             row.update(bd.labs)
+            row["Injury_date"] = injury_date
+            row["Surgery_date"] = surgery_date
             rows.append(row)
+
         return pd.DataFrame(rows)
        
 
@@ -762,23 +769,23 @@ class RedcapProcessor:
                 row["Injury_date"] = injury_date
                 row["Surgery_date"] = surgery_date
 
-                # VTE type
-                if dvt_flag == 'DVT' and pe_flag == 'PE':
-                    row['VTE_type'] = 'Both'
-                elif dvt_flag == 'DVT':
-                    row['VTE_type'] = 'DVT'
-                elif pe_flag == 'PE':
-                    row['VTE_type'] = 'PE'
-                else:
-                    row['VTE_type'] = 'No'
+                # # VTE type
+                # if dvt_flag == 'DVT' and pe_flag == 'PE':
+                #     row['VTE_type'] = 'Both'
+                # elif dvt_flag == 'DVT':
+                #     row['VTE_type'] = 'DVT'
+                # elif pe_flag == 'PE':
+                #     row['VTE_type'] = 'PE'
+                # else:
+                #     row['VTE_type'] = 'No'
 
-                # Simple Yes/No VTE
-                row['VTE'] = 'Yes' if row['VTE_type'] in ['DVT', 'PE', 'Both'] else 'No'
+                # # Simple Yes/No VTE
+                # row['VTE'] = 'Yes' if row['VTE_type'] in ['DVT', 'PE', 'Both'] else 'No'
 
                 all_draws.append(row)
 
-            df_all = pd.DataFrame(all_draws)
-            return df_all
+        df_all = pd.DataFrame(all_draws)
+        return df_all
     
 # -----------------------
 # BloodDraw and Record classes
