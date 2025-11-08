@@ -216,9 +216,21 @@ class RedcapProcessor:
         # Step 2: Replace empty strings with NaN
         df = df.replace(r'^\s*$', np.nan, regex=True)
 
+        # Drop the non-_yn column if _yn exists
+        if 'comp_cardio_yn' in df.columns and 'comp_cardio' in df.columns:
+            df = df.drop(columns=['comp_cardio'])
+
+        if 'comp_pulmonary_yn' in df.columns and 'comp_pulmonary' in df.columns:
+            df = df.drop(columns=['comp_pulmonary_yn'])
+
+        if 'comp_infection_yn' in df.columns and 'comp_infection' in df.columns:
+            df = df.drop(columns=['comp_infection_yn'])
+
         # Step 3: Rename columns using replacement_dict
         if 'screen_patient_id' in df.columns:
             df=df.rename(columns= {'screen_patient_id':'StudyID', 'record_id':'index'})
+
+        
         
         col_mapping = {}
         for keys, standard_name in self.replacement_dict.items():
@@ -260,10 +272,12 @@ class RedcapProcessor:
                 
                 df = df[~present_to_remove].copy()
 
-
+        df = df.replace({'Participant Withdrawn':np.nan})
         
-        if 'Admission_date' in df.columns:
-            df.loc[df['Admission_date'] == 'Participant Withdrawn', 'Admission_date'] = np.nan
+        df['StudyID'] = df['StudyID'].astype(str).str.strip()
+        
+        # if 'Admission_date' in df.columns:
+        #     df.loc[df['Admission_date'] == 'Participant Withdrawn', 'Admission_date'] = np.nan
 
 
         if 'index' in df.columns:
@@ -481,22 +495,7 @@ class RedcapProcessor:
             elif (group['Withdrawn'] == 'Withdrew').any():
                 df.loc[df['StudyID'] == study_id, 'Withdrawn'] = 'Withdrew'
 
-        # ---- Comorbidity and complications
-        if 'bl_tobacco' in df.columns:
-            df['comorbidty_current_smoker']=np.where(df['bl_tobacco']==1, 'Yes','No')
         
-        df['comorbidty_current_smoker'] = df.groupby('StudyID')['comorbidty_current_smoker'].ffill().bfill()
-        
-        for comorb_comp in ['comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection']:
-            df[comorb_comp] = df.groupby('StudyID')[comorb_comp].ffill().bfill()
-            df[comorb_comp] = df[comorb_comp].replace({'Checked':'Yes','Unchecked':'No','Yes*':'Yes','Other':'Yes', None:'No', np.nan:'No'})
-            df[comorb_comp] = df.groupby('StudyID')[comorb_comp].ffill().bfill()
-
-
-  
-
-
-
         treatment_map = {
             #Hip
             'intra_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
@@ -535,9 +534,9 @@ class RedcapProcessor:
         # Prefer intra_treatment, but fallback to intraop_treatment
         df['Treatment'] = df['intra_treatment'].combine_first(df['intraop_treatment'])
         df['Treatment'] = df['Treatment'].map(self.arth_fix)
-        
-        
-        # Step 5: Standardize timepoints
+
+
+         # Step 5: Standardize timepoints
         if 'Time' in df.columns:
             df['Time'] = df['Time'].apply(self._map_timepoint)
 
@@ -545,12 +544,70 @@ class RedcapProcessor:
         for col in self.metadata_cols:
             if col not in df.columns:
                 df[col] = np.nan
+        
+
+
+
+
+        # ---- Comorbidity and complications
+        
+        if 'bl_tobacco' in df.columns:
+            df['comorbidty_current_smoker']=np.where(df['bl_tobacco']==1, 'Yes','No')
+        
+        df['comorbidty_current_smoker'] = df.groupby('StudyID')['comorbidty_current_smoker'].ffill().bfill()
+        
+
+        df['StudyID'] = df['StudyID'].astype(str).str.strip().str.upper()
+        df = df.sort_values('StudyID').reset_index(drop=True)
+
+        COMORBIDITY_COMPLICATIONS = [
+            'comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular',
+            'comorbidty_pulmonary','comorbidty_stroke',
+            'complication_pulmonary','complication_cardiovascular','complication_infection'
+        ]
+
+        # Replace map
+        replace_map = {
+            'Checked': 'Yes',
+            'Unchecked': 'No',
+            'Yes*': 'Yes',
+            'Other': np.nan,
+            'Yes': 'Yes',
+            'No': 'No',
+            None: 'No'
+        }
+
+        for col in COMORBIDITY_COMPLICATIONS:
+            if col in df.columns:
+               
+               df.loc[:, col] = df.loc[:, col].astype(str).replace('nan', np.nan)  # convert to string, handle NaN
+               df.loc[:, col] = df.loc[:, col].str.strip()            # string operations
+               df.loc[:, col] = df.loc[:, col].replace(replace_map)              
+            else:
+                df.loc[:, col] = np.nan
+
+
+
+        # Count 'Yes' per StudyID and set all accordingly
+        for col in COMORBIDITY_COMPLICATIONS:
+            df[col] = df.groupby('StudyID')[col].transform(lambda x: 'Yes' if (x == 'Yes').sum() >= 1 else 'No')
+
+        for col in COMORBIDITY_COMPLICATIONS:            
+            df[col]=df[col].replace(np.nan,'No')
+
+    
+        df = df.sort_values('StudyID').reset_index(drop=True)
+
+
+       
 
         # Step 7: Save the processed DataFrame
         print(df['StudyID'].nunique())
 
         # Step 8: Build Record objects
         self._build_records()
+
+        self.df = df
 
         return self.df
 
@@ -671,6 +728,14 @@ class RedcapProcessor:
         
         df_demo['Pre_op_doac'] = df_demo['Pre_op_doac'].replace({None: 'No', 'NoData': np.nan})
 
+        for col in [
+                'comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular',
+                'comorbidty_pulmonary','comorbidty_stroke',
+                'complication_pulmonary','complication_cardiovascular','complication_infection'
+            ]:
+            df_demo[col]=np.where(df_demo[col].astype(str).str.strip().str.lower().isin(['yes','checked']), "Yes", 'No')
+
+
         
         df_demo['DVT']=np.where(df_demo['DVT'].astype(str).str.strip().str.lower().isin(['yes','checked']), "DVT", 'No')
         df_demo['PE']=np.where(df_demo['PE'].astype(str).str.strip().str.lower().isin(['yes','checked']), "PE", 'No')
@@ -704,6 +769,9 @@ class RedcapProcessor:
         df_demo['time_injury_to_surgery_hours'] = (
             (df_demo['Surgery_date'] - df_demo['Injury_date']).dt.total_seconds() / 3600
         )
+
+
+
 
         return df_demo
     
@@ -769,18 +837,7 @@ class RedcapProcessor:
                 row["Injury_date"] = injury_date
                 row["Surgery_date"] = surgery_date
 
-                # # VTE type
-                # if dvt_flag == 'DVT' and pe_flag == 'PE':
-                #     row['VTE_type'] = 'Both'
-                # elif dvt_flag == 'DVT':
-                #     row['VTE_type'] = 'DVT'
-                # elif pe_flag == 'PE':
-                #     row['VTE_type'] = 'PE'
-                # else:
-                #     row['VTE_type'] = 'No'
-
-                # # Simple Yes/No VTE
-                # row['VTE'] = 'Yes' if row['VTE_type'] in ['DVT', 'PE', 'Both'] else 'No'
+             
 
                 all_draws.append(row)
 
