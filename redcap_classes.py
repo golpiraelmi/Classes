@@ -62,15 +62,15 @@ class RedcapProcessor:
 
         # ---- Timepoint dictionary ----
         self.timepoint_dict = {
-            "Admission" : ['Admission', 'Admission/Pre-Op', 'admission', 'Emergency Admission', 'emergency admission', 'admission/pre-operative', 'admission/ pre-operative', 
+            "Admission" : ['Admission', 'Admission/Pre-Op', 'admission', 'Emergency Admission', 'emergency admission', 'admission/pre-operative', 'admission/ pre-operative', 'Admit',
                            'admission/pre-op', 'admisssion', 'pre op/admission', 'admit', 'admission/post-fracture day 1','Admission/ Pre-Operative','Admission/Pre-Operative','Pre op/admission','Admission/Pre-op'],
 
             "Pre-Op": ['Pre-Op','Pre Op','pre op','PRE OP','Pre Operative','Pre op','Pre-Operative Day',
                     'Pre-OP','pre-op','Pre-operative','Pre-Operative Day 1/OR Day','Pre-Op/OR Day','Preop',
-                    'Pre-Operative','Pre-op','1 hour pre-op','1hr pre-op','pre-op 1 hour','pre-op (unsch. day 5)',
+                    'Pre-Operative','Pre-op','1 hour pre-op','1hr pre-op','pre-op 1 hour','pre-op (unsch. day 5)','1hr Pre-Op',
                     'preop 1 hour','ex-fix pod 4/preop','preop', 'Ex-fix POD 4/Preop','PREOP'],
 
-            "POST_OP": ['reaming', 'intraoperative', 'post-operative', 'post-op', '1h post-op', '1 hour post-op', 'post op', '1hr post-op', '1 hour post op',
+            "POST_OP": ['reaming', 'intraoperative', 'post-operative', 'post-op', '1h post-op', '1 hour post-op', 'post op', '1hr post-op', '1 hour post op','1hr Post-op',
                     '1 hour po', '1 hour post ream', 'post reaming', 'post ream operation 1', 'post ream', '1 hour post-ream', '1 hour post reaming', 'postream',
                     'po reaming', 'post-ream', 'post reaming ','Post-Operative', 'Post-Op', 'Post-operative', 'Post-op', '1 Hour Post-Op', '1 Hour Post Op', 'POST REAMING', 'PO REAMING', '1 hour PO',
                     'Reaming ', 'Post Reaming ','Post-Ream','POSTREAM','Post- REAM', 'Post-REAM', '1hr Post-Op','POST-REAM','Post ream operation 1'],
@@ -802,6 +802,9 @@ class RedcapProcessor:
     # ------------------------------------------------------------------------------
     # Get all blood draws for all patients
     # ------------------------------------------------------------------------------
+
+
+    
     def get_all_blood_draws(self):
         all_draws = []
 
@@ -811,6 +814,7 @@ class RedcapProcessor:
             surgery_date = pd.to_datetime(demo.get('Surgery_date', pd.NA), errors='coerce')
             dvt_flag = demo.get('DVT', 'No')
             pe_flag  = demo.get('PE', 'No')
+
 
             for bd in rec.blood_draws:
                 row = {"StudyID": rec.study_id}
