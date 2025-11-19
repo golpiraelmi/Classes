@@ -39,8 +39,8 @@ class RedcapProcessor:
             ('date_time_injury','adm_injury_date','date_injury'):'Injury_date',
             ('admission_date_time','adm_er_date','adm_date'): "Admission_date", 
             ('surgery_date_time','intra_op_date','intraop_date_surg','postop_dt_surg'):'Surgery_date',
-            ('teg_date_time','lab_dt_blood_draw','teg_date','teg_run_date','time_teg',):'Draw_date',#'dt_blood_drawn'
-            ('teg_run_time','teg_time',):'teg_time',
+            ('teg_date_time','lab_dt_blood_draw','teg_date','teg_bd_date','time_teg',):'Draw_date', #teg_run_date replaced with --->teg_bd_date
+            ('teg_time','teg_bd_time'):'teg_time',  # Added teg_bd_time removed 'teg_run_time',
             ('teg_time_lab_panel',):'lab_time',
             ('aoota_classification','inj_aoota',):'AO_OTA',
             ('comp_dvt_yn','complication_dvt','outcomes_vte_type___1'):'DVT',
@@ -63,17 +63,17 @@ class RedcapProcessor:
         # ---- Timepoint dictionary ----
         self.timepoint_dict = {
             "Admission" : ['Admission', 'Admission/Pre-Op', 'admission', 'Emergency Admission', 'emergency admission', 'admission/pre-operative', 'admission/ pre-operative', 'Admit',
-                           'admission/pre-op', 'admisssion', 'pre op/admission', 'admit', 'admission/post-fracture day 1','Admission/ Pre-Operative','Admission/Pre-Operative','Pre op/admission','Admission/Pre-op'],
+                           'admission/pre-op', 'admisssion', 'pre op/admission', 'admit', 'admission/post-fracture day 1','Admission/ Pre-Operative','Admission/Pre-Operative','Pre op/admission','Admission/Pre-op','Admisssion'],
 
             "Pre-Op": ['Pre-Op','Pre Op','pre op','PRE OP','Pre Operative','Pre op','Pre-Operative Day',
                     'Pre-OP','pre-op','Pre-operative','Pre-Operative Day 1/OR Day','Pre-Op/OR Day','Preop',
                     'Pre-Operative','Pre-op','1 hour pre-op','1hr pre-op','pre-op 1 hour','pre-op (unsch. day 5)','1hr Pre-Op',
-                    'preop 1 hour','ex-fix pod 4/preop','preop', 'Ex-fix POD 4/Preop','PREOP'],
+                    'preop 1 hour','ex-fix pod 4/preop','preop', 'Ex-fix POD 4/Preop','PREOP','Pre-Op (unsch. day 5)', '1 Hour Pre-Op'],
 
             "POST_OP": ['reaming', 'intraoperative', 'post-operative', 'post-op', '1h post-op', '1 hour post-op', 'post op', '1hr post-op', '1 hour post op','1hr Post-op',
                     '1 hour po', '1 hour post ream', 'post reaming', 'post ream operation 1', 'post ream', '1 hour post-ream', '1 hour post reaming', 'postream',
                     'po reaming', 'post-ream', 'post reaming ','Post-Operative', 'Post-Op', 'Post-operative', 'Post-op', '1 Hour Post-Op', '1 Hour Post Op', 'POST REAMING', 'PO REAMING', '1 hour PO',
-                    'Reaming ', 'Post Reaming ','Post-Ream','POSTREAM','Post- REAM', 'Post-REAM', '1hr Post-Op','POST-REAM','Post ream operation 1'],
+                    'Reaming ', 'Post Reaming ','Post-Ream','POSTREAM','Post- REAM', 'Post-REAM', '1hr Post-Op','POST-REAM','Post ream operation 1','1 HOUR POST REAM','1 Hour PO', 'Post Op'],
 
 
             "PFD1": ['PFD1','PFD 1','Post Frac/Pre-Op','Post Fracture Day 1','Day 1 post #','Day 1 Post #','postfractureday1',
@@ -91,14 +91,14 @@ class RedcapProcessor:
             "POD1" : ['post op day 1', 'POD1', 'Day 1 post-op', 'PO Day 1', 'Day 1 Post-Op', 'POD 1', 'POD 1 ', 'Day 1 post op', 'Post Operative Day 1', 'Day 1 Post-op',
                        'Day 1 post o', 'Postoperative Day 1', 'Pod 1', '24h Post-Op', '24hrs post-op', 'post operative day 1', '24hr Post-Op', '24 Hours Post-Op', 
                        '24h post-op', '24h post=op', 'pod 1', 'po day 1', '24 hour po', '24h post op', 'post operative day 1', '24hrs post-op', '24hr post-op', 'post op day 1', 
-                       'po day 1/24hrs po', 'pod1', '24 hours po', 'po day1/24hrs po', '24 hours post-op','24h Post=Op', '24h Post-op', 'PO Day1/24hrs PO', 'Post operative Day 1'],
+                       'po day 1/24hrs po', 'pod1', '24 hours po', 'po day1/24hrs po', '24 hours post-op','24h Post=Op', '24h Post-op', 'PO Day1/24hrs PO', 'Post operative Day 1','24 hours PO','24 hour PO','PO Day 1/24hrs PO',],
 
 
             "POD2": ['POD 2','POD2','Day 2 post-op','Day 2 Post-Op','Day 2 post op','PO Day 2','Day 2 Post-op',
                     'Post Operative Day 2','Day  2 post-op','48h Post-Op (Discharge)','48h Post-op','48hrs post-op','POD2',
                     'post operative day 2','48hr Post-Op','48 Hours Post-Op','48h post op','48 hours post-op','48hrs post-op',
                     'po day 2/48 hours po','po day 2/48hrs po','48h post-op','48h post-op','48h post-op','po day 2',
-                    'post operative day 2','48 hour po','48h post-op (discharge)','pod 2','48hr post-op','pod2','48 hours po', '48h Post-Op','48 hours PO','PO Day 2/48 hours PO'],
+                    'post operative day 2','48 hour po','48h post-op (discharge)','pod 2','48hr post-op','pod2','48 hours po', '48h Post-Op','48 hours PO','PO Day 2/48 hours PO','48 hour PO','48hr Post-op','PO Day 2/48hrs PO'],
 
 
             "POD3": ['POD3','Day 3 post-op','POD 3','Day 3 Post-Op','PO Day 3','Day 3 post op','Post Operative Day 3',
@@ -109,10 +109,10 @@ class RedcapProcessor:
 
 
             "POD4": ['POD 4','Day 4 post-op','Day 4 Post-Op','PO Day 4','Day 4 post op','Day 4 Post-op','POD4',
-                'post operative day 4','96hr Post-Op','pod 4 and pod 2','96h post-op (discharge)','96h post-op','96h post op',
+                'post operative day 4','96hr Post-Op','pod 4 and pod 2','96h post-op (discharge)','96h post-op','96h post op', '96 hour PO','PO Day 4/96hrs PO','PO Day 4/92hrs PO',
                 'po day 4/96hrs po','po day 4/92hrs po','pod 4','pod4','96h post-op (discharge)','96hr post-op','96 hours po',
                 '96 hour po','po day 4','96 hours post-op','postoperative day 4','96hrs post-op','96h Post-Op (Discharge)', '96h Post-Op', '96h Post-op', '96 Hours Post-Op', '96 hours PO', 
-                'Post Operative Day 4', 'Postoperative Day 4'],
+                'Post Operative Day 4', 'Postoperative Day 4', '96hr Post-op'],
 
 
             "POD5": ['pod 5','POD5','POD 5','Day 5 post-op','PO Day 5','Day 5 Post-Op','Day 5 post op','Day 5 Post-op',
@@ -130,11 +130,11 @@ class RedcapProcessor:
 
 
             "Week4": ['4 week','4 Week FU','4 weeks','4 weeks follow up','4-Week','4weeks','4 WEEKS FOLLOW UP',
-                '4 weeks f/u','4 week follow up','4 week ','4week','Week4','4 weeks','4 week fu','4week','4 week F/U',],
+                '4 weeks f/u','4 week follow up','4 week ','4week','Week4','4 weeks','4 week fu','4week','4 week F/U','Unscheduled 4 Week F/U'],
 
 
             "Week6": ['6 week','6 weeks follow up','6 Week FU','6weeks','6 weeks','6-Week','6 Week','6 Week F/U',
-                        '6 weeek f/u','6 week f/u','6 week fu', '6 week F/U', '6 Weeek F/U','6-week'],
+                        '6 weeek f/u','6 week f/u','6 week fu', '6 week F/U', '6 Weeek F/U','6-week','6 week post op','6 week follow up', '6 Week Follow Up', '6 weeks '],
 
                       
             "Month3": ['3 month','3 Month Follow Up','3 months follow up','3 months','3 Month FU','3months',
@@ -712,45 +712,24 @@ class RedcapProcessor:
     # ------------------------------------------------------------------------------
     # Get demographics for a patient
     # ------------------------------------------------------------------------------
-    def get_patient_demographics(self, patient_id):
-        if self.df is None:
-            raise ValueError("Data not loaded. Run fetch_and_process() first.")
+    def get_patient_demographics(self, study_id):
+        """Display just the demographics for a single patient with StudyID as header, return None."""
+        df_demo = self.get_all_demographics()
+        patient_demo = df_demo[df_demo['StudyID'] == study_id].copy()
 
-        patient_rows = self.df[self.df['StudyID'] == patient_id]
-        if patient_rows.empty:
-            return None
+        if not patient_demo.empty:
+            # Take first row and transpose
+            patient_row = patient_demo.iloc[[0]].transpose()
 
-        # Take first non-null value for each metadata column
-        patient_demo = patient_rows[self.metadata_cols].apply(
-            lambda col: col.dropna().iloc[0] if col.dropna().any() else None
-        )
+            # Set the StudyID as the column header
+            patient_row.columns = [study_id]
 
-        # --- Pre-op DOAC ---
-        medication = self.medications.get(patient_demo["StudyID"], None)
-        patient_demo["Pre_op_med"] = medication if medication is not None else 'No'
-        if patient_demo['Pre_op_med'] == 'NoData':
-            patient_demo['Pre_op_med'] = np.nan
+            # Drop the StudyID row to avoid repetition
+            patient_row = patient_row.drop('StudyID')
 
-        # Dates
-        patient_demo['Injury_date'] = pd.to_datetime(patient_demo['Injury_date'], errors="coerce")
-        patient_demo['Surgery_date'] = pd.to_datetime(patient_demo['Surgery_date'], errors="coerce")
-
-        # ---- Determine Withdrawn / Death status ----
-        if {'Withdrawn', 'Death'}.issubset(patient_rows.columns):
-            # Take the first non-null value for each
-            patient_demo['Death'] = patient_rows['Death'].dropna().iloc[0] if patient_rows['Death'].notna().any() else 'No'
-            patient_demo['Withdrawn'] = patient_rows['Withdrawn'].dropna().iloc[0] if patient_rows['Withdrawn'].notna().any() else 'No'
-        else:
-            patient_demo['Death'] = 'No'
-            patient_demo['Withdrawn'] = 'No'
-
-
-        # ---- Time from injury to surgery ----
-        patient_demo['time_injury_to_surgery_hours'] = (
-            patient_demo['Surgery_date'] - patient_demo['Injury_date']
-        ).total_seconds() / 3600 if pd.notnull(patient_demo['Surgery_date']) and pd.notnull(patient_demo['Injury_date']) else np.nan
-
-        return patient_demo
+            display(patient_row)
+        
+        return None
 
     
     # ------------------------------------------------------------------------------
@@ -769,69 +748,6 @@ class RedcapProcessor:
         df_demo = df_demo.drop_duplicates(subset='StudyID', keep='first')
 
         return df_demo
-
-    # def get_all_demographics(self):
-    #     all_demo = []
-
-    #     for record in self.records.values():
-    #         demo = record.get_demographics().copy()
-    #         demo['StudyID'] = record.study_id  # Ensure StudyID is included
-    #         demo['Pre_op_med'] = self.medications.get(record.study_id, None)
-    #         all_demo.append(demo)
-
-    #     # Build main demographics dataframe
-    #     df_demo = pd.DataFrame(all_demo)
-
-        
-    #     df_demo['Pre_op_med'] = df_demo['Pre_op_med'].replace({None: 'LMWH', 'NoData': np.nan})
-
-    #     for col in [
-    #             'comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular',
-    #             'comorbidty_pulmonary','comorbidty_stroke',
-    #             'complication_pulmonary','complication_cardiovascular','complication_infection'
-    #         ]:
-    #         df_demo[col]=np.where(df_demo[col].astype(str).str.strip().str.lower().isin(['yes','checked']), "Yes", 'No')
-
-
-        
-    #     df_demo['DVT']=np.where(df_demo['DVT'].astype(str).str.strip().str.lower().isin(['yes','checked']), "DVT", 'No')
-    #     df_demo['PE']=np.where(df_demo['PE'].astype(str).str.strip().str.lower().isin(['yes','checked']), "PE", 'No')
-
-       
-    #     # ---- Withdrawn / Death status ----
-    #     if {'Withdrawn', 'Death'}.issubset(self.df.columns):
-    #         # Take the first non-null value for each StudyID
-    #         death_map = (
-    #             self.df.groupby('StudyID')['Death']
-    #             .first()
-    #             .to_dict()
-    #         )
-    #         withdrew_map = (
-    #             self.df.groupby('StudyID')['Withdrawn']
-    #             .first()
-    #             .to_dict()
-    #         )
-
-    #         df_demo['Death'] = df_demo['StudyID'].map(death_map).fillna('No')
-    #         df_demo['Withdrawn'] = df_demo['StudyID'].map(withdrew_map).fillna('No')
-    #     else:
-    #         df_demo['Death'] = 'No'
-    #         df_demo['Withdrawn'] = 'No'
-
-
-        # ---- Time calculations ----
-        # df_demo['Injury_date'] = pd.to_datetime(df_demo['Injury_date'], errors="coerce")
-        # df_demo['Surgery_date'] = pd.to_datetime(df_demo['Surgery_date'], errors="coerce")
-
-        # df_demo['time_injury_to_surgery_hours'] = (
-        #     (df_demo['Surgery_date'] - df_demo['Injury_date']).dt.total_seconds() / 3600
-        # )
-
-
-
-
-    #     return df_demo
-    
     
     # ------------------------------------------------------------------------------
     # Get patient blood draws
