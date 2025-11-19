@@ -39,7 +39,7 @@ class RedcapProcessor:
             ('date_time_injury','adm_injury_date','date_injury'):'Injury_date',
             ('admission_date_time','adm_er_date','adm_date'): "Admission_date", 
             ('surgery_date_time','intra_op_date','intraop_date_surg','postop_dt_surg'):'Surgery_date',
-            ('teg_date_time','lab_dt_blood_draw','teg_date','dt_blood_drawn','teg_run_date'):'Draw_date',
+            ('teg_date_time','lab_dt_blood_draw','teg_date','teg_run_date','time_teg',):'Draw_date',#'dt_blood_drawn'
             ('teg_run_time','teg_time',):'teg_time',
             ('teg_time_lab_panel',):'lab_time',
             ('aoota_classification','inj_aoota',):'AO_OTA',
@@ -147,18 +147,26 @@ class RedcapProcessor:
         ### PRE_OP_DOAC
         self.medications = {
             **dict.fromkeys(
-                ['HPA-001', 'HPA-004', 'HPA-008', 'HPA-009', 'HPA-010',
+                    ['HPA-001', 'HPA-004', 'HPA-008', 'HPA-009', 'HPA-010',
                     'HPA-012', 'HPA-014', 'HPA-015', 'HPA-016', 'HPA-017', 'HPA-019',
                     'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
                     'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
                     'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
-                    'HPA-051','HPA-052',
-                    'TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
-                    'TH-225', 'TH-227', 'TH-236', 'TH-240', 'TH-244', 
-                    'TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
-                    'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "Yes"),
-                     **dict.fromkeys(['TH-110'], np.nan)
+                    'HPA-051','HPA-052','TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
+                    'TH-225', 'TH-227', 'TH-236', 'TH-240','TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
+                    'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "DOAC"),
+            **dict.fromkeys(['TH-244'], 'Warfarin'),
+            **dict.fromkeys(['TH-006','TH-008','TH-011','TH-013','TH-023','TH-025','TH-026','TH-028','TH-031','TH-035','TH-038','TH-041','TH-046','TH-059','TH-066','TH-072','TH-082','TH-086','TH-090','TH-092','TH-093','TH-100',
+                             'TH-102','TH-103','TH-104','TH-105','TH-116','TH-126','TH-127','TH-128','TH-133','TH-139','TH-185','TH-258','TH-301','TH-305','TF-005','TF-038','TF-059','TF-071','TF-109','TF-121','TPA-019', 'TPA-085'],'ASA'),
+            **dict.fromkeys(['TH-004','TH-010','TH-075','TH-110'], 'Missing')
         }
+
+        ### POST_OP_DOAC
+        self.medications_postop = {
+            **dict.fromkeys(['TF-042','TF-128','TF-027','TF-039','TF-042','TF-059','TF-073','TF-120','TF-128','TPA-010','TPA-058','TPA-082','TPA-093','TPA-100','TPA-055','TPA-056','TPA-058','TPA-073','TPA-082','TPA-089','TPA-095','TPA-097'], "DOAC"),
+            **dict.fromkeys(['TH-036','TH-042','TH-043','TH-044','TH-062','TH-068','TH-073','TH-083','TH-135','TH-170','TH-180','TH-215','TH-221','TH-273','TH-299'],'ASA'),
+            **dict.fromkeys(['TH-133', 'TH-246', 'TH-258', 'TH-276', 'TH-305', 'TH-259'],'ASA+LMWH'),}
+
 
 
         self.arth_fix = {
@@ -194,8 +202,8 @@ class RedcapProcessor:
         # }
 
         # ---- Define metadata and lab columns ----
-        self.metadata_cols = ['StudyID','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
-                              'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection']
+        self.metadata_cols = ['StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
+                              'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection','Pre_op_med','time_injury_to_surgery_hours']
         self.lab_cols = ['StudyID', 'Time', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg']
 
         
@@ -292,10 +300,11 @@ class RedcapProcessor:
             df['screening_status'] = df.groupby('index')['screening_status'].ffill().bfill()
             df = df[df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled']
 
-        #### VTE/PE
+        # DVT/PE
+        
         for col in ['DVT', 'PE']:
             # Convert to boolean: True if "Yes", False if "No" or missing
-            df[col + '_bool'] = df[col].eq('Yes')
+            df[col + '_bool'] = df[col].str.strip().str.lower().isin(['yes', 'checked'])
             
             # Group by StudyID and check if any True exists
             df[col] = df.groupby('StudyID')[col + '_bool'].transform('any')
@@ -343,14 +352,18 @@ class RedcapProcessor:
             # If lab_time missing entirely, mark flag
             lab_time_exists = 'lab_time' in df.columns
             if not lab_time_exists:
-                df['lab_time'] = pd.NA
+                df['lab_time'] = pd.NA  # create column if missing
 
             # --- Step 4: Replace missing times with midnight ---
             df['teg_time'] = df['teg_time'].fillna('00:00').astype(str)
+
             if lab_time_exists:
                 df['lab_time'] = df['lab_time'].astype(str)
+                # Replace only rows where teg_time is '00:00'
+                df.loc[df['teg_time'] == '00:00', 'teg_time'] = df['lab_time']
             else:
-                df['lab_time'] = df['lab_time'].fillna('00:00').astype(str)
+                df['lab_time'] = df['teg_time'].fillna('00:00').astype(str)
+
 
             # --- Step 5: Define fallback date (lab_date_visit if Draw_date missing) ---
             if 'lab_date_visit' in df.columns:
@@ -392,10 +405,22 @@ class RedcapProcessor:
                         + df['teg_time']
                     )
                 )
+            # --- Step 8: Hemoglobin consistency rules ---
 
-            # --- Step 8: Convert both to datetime ---
-            df['Draw_date_teg'] = pd.to_datetime(df['Draw_date_teg'], errors='coerce')
+            # Ensure Draw_date_lab and Draw_date_teg are proper datetimes
             df['Draw_date_lab'] = pd.to_datetime(df['Draw_date_lab'], errors='coerce')
+            df['Draw_date_teg'] = pd.to_datetime(df['Draw_date_teg'], errors='coerce')
+
+            # If Hemoglobin is missing → Draw_date_lab should be missing too
+            df.loc[df['Hemoglobin'].isna(), 'Draw_date_lab'] = pd.NaT
+
+            # If Hemoglobin is present but Draw_date_lab is missing → copy from Draw_date_teg
+            df.loc[
+                (~df['Hemoglobin'].isna()) & (df['Draw_date_lab'].isna()),
+                'Draw_date_lab'
+            ] = df.loc[
+                (~df['Hemoglobin'].isna()) & (df['Draw_date_lab'].isna()),
+                'Draw_date_teg']
 
 
         if 'adm_injury_time' in df.columns and 'Injury_date' in df.columns:
@@ -443,6 +468,7 @@ class RedcapProcessor:
 
             # Fill the same Surgery_date across all rows for each StudyID
             df['Surgery_date'] = df.groupby('StudyID')['Surgery_date'].transform(lambda x: x.ffill().bfill())
+           
 
 
         # ---- Withdrawn/Death from main Withdrawn column ----
@@ -536,6 +562,12 @@ class RedcapProcessor:
         df['Treatment'] = df['Treatment'].map(self.arth_fix)
 
 
+        # Medications
+        df['Pre_op_med'] = df['StudyID'].map(self.medications)
+        df['Pre_op_med'] = df['Pre_op_med'].replace({np.nan: 'LMWH'})
+
+
+
          # Step 5: Standardize timepoints
         if 'Time' in df.columns:
             df['Time'] = df['Time'].apply(self._map_timepoint)
@@ -598,8 +630,24 @@ class RedcapProcessor:
     
         df = df.sort_values('StudyID').reset_index(drop=True)
 
+        ######
+        df['Age'] = df.groupby('StudyID')['Age'].transform(lambda x: x.ffill().bfill()) 
+        df['Sex'] = df.groupby('StudyID')['Sex'].transform(lambda x: x.ffill().bfill()) 
+        df['BMI'] = df.groupby('StudyID')['BMI'].transform(lambda x: x.ffill().bfill()) 
+        df['Injury_date'] = df.groupby('StudyID')['Injury_date'].transform(lambda x: x.ffill().bfill()) 
+        df['Admission_date'] = df.groupby('StudyID')['Admission_date'].transform(lambda x: x.ffill().bfill()) 
+        df['Surgery_date'] = df.groupby('StudyID')['Surgery_date'].transform(lambda x: x.ffill().bfill()) 
+        df['AO_OTA'] = df.groupby('StudyID')['AO_OTA'].transform(lambda x: x.ffill().bfill()) 
 
-       
+
+    # ---- Time calculations ----
+        df['Injury_date'] = pd.to_datetime(df['Injury_date'], errors="coerce")
+        df['Surgery_date'] = pd.to_datetime(df['Surgery_date'], errors="coerce")
+
+        df['time_injury_to_surgery_hours'] = (
+            (df['Surgery_date'] - df['Injury_date']).dt.total_seconds() / 3600
+        )
+
 
         # Step 7: Save the processed DataFrame
         print(df['StudyID'].nunique())
@@ -647,11 +695,6 @@ class RedcapProcessor:
             )
             demo_dict = demo.to_dict()
 
-            
-
-
-
-
             blood_draws = []
             for _, row in rows.iterrows():
                 if pd.notnull(row.get("Draw_date")):
@@ -684,9 +727,9 @@ class RedcapProcessor:
 
         # --- Pre-op DOAC ---
         medication = self.medications.get(patient_demo["StudyID"], None)
-        patient_demo["Pre_op_doac"] = medication if medication is not None else 'No'
-        if patient_demo['Pre_op_doac'] == 'NoData':
-            patient_demo['Pre_op_doac'] = np.nan
+        patient_demo["Pre_op_med"] = medication if medication is not None else 'No'
+        if patient_demo['Pre_op_med'] == 'NoData':
+            patient_demo['Pre_op_med'] = np.nan
 
         # Dates
         patient_demo['Injury_date'] = pd.to_datetime(patient_demo['Injury_date'], errors="coerce")
@@ -714,66 +757,80 @@ class RedcapProcessor:
     # Get all demographics for all patients
     # ------------------------------------------------------------------------------
     def get_all_demographics(self):
-        all_demo = []
+        if self.df is None:
+            raise ValueError("Data not processed. Run fetch_and_process() first.")
 
-        for record in self.records.values():
-            demo = record.get_demographics().copy()
-            demo['StudyID'] = record.study_id  # Ensure StudyID is included
-            demo['Pre_op_doac'] = self.medications.get(record.study_id, None)
-            all_demo.append(demo)
+        # Keep only metadata/demographic columns that exist in the df
+        cols = [c for c in self.metadata_cols if c in self.df.columns]
 
-        # Build main demographics dataframe
-        df_demo = pd.DataFrame(all_demo)
+        df_demo = self.df[cols].copy()
+
+        # Remove duplicates per StudyID
+        df_demo = df_demo.drop_duplicates(subset='StudyID', keep='first')
+
+        return df_demo
+
+    # def get_all_demographics(self):
+    #     all_demo = []
+
+    #     for record in self.records.values():
+    #         demo = record.get_demographics().copy()
+    #         demo['StudyID'] = record.study_id  # Ensure StudyID is included
+    #         demo['Pre_op_med'] = self.medications.get(record.study_id, None)
+    #         all_demo.append(demo)
+
+    #     # Build main demographics dataframe
+    #     df_demo = pd.DataFrame(all_demo)
 
         
-        df_demo['Pre_op_doac'] = df_demo['Pre_op_doac'].replace({None: 'No', 'NoData': np.nan})
+    #     df_demo['Pre_op_med'] = df_demo['Pre_op_med'].replace({None: 'LMWH', 'NoData': np.nan})
 
-        for col in [
-                'comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular',
-                'comorbidty_pulmonary','comorbidty_stroke',
-                'complication_pulmonary','complication_cardiovascular','complication_infection'
-            ]:
-            df_demo[col]=np.where(df_demo[col].astype(str).str.strip().str.lower().isin(['yes','checked']), "Yes", 'No')
+    #     for col in [
+    #             'comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular',
+    #             'comorbidty_pulmonary','comorbidty_stroke',
+    #             'complication_pulmonary','complication_cardiovascular','complication_infection'
+    #         ]:
+    #         df_demo[col]=np.where(df_demo[col].astype(str).str.strip().str.lower().isin(['yes','checked']), "Yes", 'No')
 
 
         
-        df_demo['DVT']=np.where(df_demo['DVT'].astype(str).str.strip().str.lower().isin(['yes','checked']), "DVT", 'No')
-        df_demo['PE']=np.where(df_demo['PE'].astype(str).str.strip().str.lower().isin(['yes','checked']), "PE", 'No')
+    #     df_demo['DVT']=np.where(df_demo['DVT'].astype(str).str.strip().str.lower().isin(['yes','checked']), "DVT", 'No')
+    #     df_demo['PE']=np.where(df_demo['PE'].astype(str).str.strip().str.lower().isin(['yes','checked']), "PE", 'No')
 
        
-        # ---- Withdrawn / Death status ----
-        if {'Withdrawn', 'Death'}.issubset(self.df.columns):
-            # Take the first non-null value for each StudyID
-            death_map = (
-                self.df.groupby('StudyID')['Death']
-                .first()
-                .to_dict()
-            )
-            withdrew_map = (
-                self.df.groupby('StudyID')['Withdrawn']
-                .first()
-                .to_dict()
-            )
+    #     # ---- Withdrawn / Death status ----
+    #     if {'Withdrawn', 'Death'}.issubset(self.df.columns):
+    #         # Take the first non-null value for each StudyID
+    #         death_map = (
+    #             self.df.groupby('StudyID')['Death']
+    #             .first()
+    #             .to_dict()
+    #         )
+    #         withdrew_map = (
+    #             self.df.groupby('StudyID')['Withdrawn']
+    #             .first()
+    #             .to_dict()
+    #         )
 
-            df_demo['Death'] = df_demo['StudyID'].map(death_map).fillna('No')
-            df_demo['Withdrawn'] = df_demo['StudyID'].map(withdrew_map).fillna('No')
-        else:
-            df_demo['Death'] = 'No'
-            df_demo['Withdrawn'] = 'No'
+    #         df_demo['Death'] = df_demo['StudyID'].map(death_map).fillna('No')
+    #         df_demo['Withdrawn'] = df_demo['StudyID'].map(withdrew_map).fillna('No')
+    #     else:
+    #         df_demo['Death'] = 'No'
+    #         df_demo['Withdrawn'] = 'No'
 
 
         # ---- Time calculations ----
-        df_demo['Injury_date'] = pd.to_datetime(df_demo['Injury_date'], errors="coerce")
-        df_demo['Surgery_date'] = pd.to_datetime(df_demo['Surgery_date'], errors="coerce")
+        # df_demo['Injury_date'] = pd.to_datetime(df_demo['Injury_date'], errors="coerce")
+        # df_demo['Surgery_date'] = pd.to_datetime(df_demo['Surgery_date'], errors="coerce")
 
-        df_demo['time_injury_to_surgery_hours'] = (
-            (df_demo['Surgery_date'] - df_demo['Injury_date']).dt.total_seconds() / 3600
-        )
-
-
+        # df_demo['time_injury_to_surgery_hours'] = (
+        #     (df_demo['Surgery_date'] - df_demo['Injury_date']).dt.total_seconds() / 3600
+        # )
 
 
-        return df_demo
+
+
+    #     return df_demo
     
     
     # ------------------------------------------------------------------------------
@@ -837,7 +894,7 @@ class RedcapProcessor:
                 row['surgery_to_teg_hrs'] = ((draw_teg - surgery_date).total_seconds()/3600) if pd.notnull(draw_teg) and pd.notnull(surgery_date) else pd.NA
 
                 # Add patient-level info
-                row["Pre_op_doac"] = self.medications.get(rec.study_id, 'No')
+                row["Pre_op_med"] = self.medications.get(rec.study_id, 'No')
                 row["Injury_date"] = injury_date
                 row["Surgery_date"] = surgery_date
 
@@ -908,6 +965,7 @@ class Record:
                 bd.labs["surgery_to_teg_hrs"] = (draw_date_teg - surgery_date).total_seconds() / 3600
             else:
                 bd.labs["surgery_to_teg_hrs"] = np.nan
+
 
 
     def __repr__(self):
