@@ -68,7 +68,7 @@ class RedcapProcessor:
             "Pre-Op": ['Pre-Op','Pre Op','pre op','PRE OP','Pre Operative','Pre op','Pre-Operative Day',
                     'Pre-OP','pre-op','Pre-operative','Pre-Operative Day 1/OR Day','Pre-Op/OR Day','Preop',
                     'Pre-Operative','Pre-op','1 hour pre-op','1hr pre-op','pre-op 1 hour','pre-op (unsch. day 5)','1hr Pre-Op',
-                    'preop 1 hour','ex-fix pod 4/preop','preop', 'Ex-fix POD 4/Preop','PREOP','Pre-Op (unsch. day 5)', '1 Hour Pre-Op'],
+                    'preop 1 hour','ex-fix pod 4/preop','preop', 'Ex-fix POD 4/Preop','PREOP','Pre-Op (unsch. day 5)', '1 Hour Pre-Op','Pre-OP-Stage 2-2','Pre-procedure 1','Pre-procedure 2','4 hr Pre-OP'],
 
             "POST_OP": ['reaming', 'intraoperative', 'post-operative', 'post-op', '1h post-op', '1 hour post-op', 'post op', '1hr post-op', '1 hour post op','1hr Post-op',
                     '1 hour po', '1 hour post ream', 'post reaming', 'post ream operation 1', 'post ream', '1 hour post-ream', '1 hour post reaming', 'postream',
@@ -82,16 +82,16 @@ class RedcapProcessor:
                      'Day 1 - Post Fracture','Post frac Day 1 - Pre-op','Post Frac Day 1','Day 1', 'admission/post-fracture day 1','Post-fracture #1/ Pre-op','postfracture day 1', 'post-fracture day 1'],
 
             "PFD2": ['PFD2','PFD 2','Day 2 post #','postfractureday2','POSTFRACTUREDAY2','POST FRACTURE DAY 2',
-                     'Post Fracture Day 2','Post Frac Day 2','Day 2 Post fracture/Pre-Op','Day 2 Post #','post fracture day 2','Ex-Fix POD 2','Unscheduled post ex-fix'],
+                     'Post Fracture Day 2','Post Frac Day 2','Day 2 Post fracture/Pre-Op','Day 2 Post #','post fracture day 2','Ex-Fix POD 2','Unscheduled post ex-fix','PT-ST1d2'],
 
-            "PFD3": ['Day 3 post #','Post Frac Day 3','Ex-Fix POD 3'],
+            "PFD3": ['Day 3 post #','Post Frac Day 3','Ex-Fix POD 3','PTST1d3'],
 
             "PFD4": ['Post Frac Day 4'],
 
             "POD1" : ['post op day 1', 'POD1', 'Day 1 post-op', 'PO Day 1', 'Day 1 Post-Op', 'POD 1', 'POD 1 ', 'Day 1 post op', 'Post Operative Day 1', 'Day 1 Post-op',
                        'Day 1 post o', 'Postoperative Day 1', 'Pod 1', '24h Post-Op', '24hrs post-op', 'post operative day 1', '24hr Post-Op', '24 Hours Post-Op', 
                        '24h post-op', '24h post=op', 'pod 1', 'po day 1', '24 hour po', '24h post op', 'post operative day 1', '24hrs post-op', '24hr post-op', 'post op day 1', 
-                       'po day 1/24hrs po', 'pod1', '24 hours po', 'po day1/24hrs po', '24 hours post-op','24h Post=Op', '24h Post-op', 'PO Day1/24hrs PO', 'Post operative Day 1','24 hours PO','24 hour PO','PO Day 1/24hrs PO',],
+                       'po day 1/24hrs po', 'pod1', '24 hours po', 'po day1/24hrs po', '24 hours post-op','24h Post=Op', '24h Post-op', 'PO Day1/24hrs PO', 'Post operative Day 1','24 hours PO','24 hour PO','PO Day 1/24hrs PO','Day 1 post Stage 1','Post-Operative 1'],
 
 
             "POD2": ['POD 2','POD2','Day 2 post-op','Day 2 Post-Op','Day 2 post op','PO Day 2','Day 2 Post-op',
@@ -112,7 +112,7 @@ class RedcapProcessor:
                 'post operative day 4','96hr Post-Op','pod 4 and pod 2','96h post-op (discharge)','96h post-op','96h post op', '96 hour PO','PO Day 4/96hrs PO','PO Day 4/92hrs PO',
                 'po day 4/96hrs po','po day 4/92hrs po','pod 4','pod4','96h post-op (discharge)','96hr post-op','96 hours po',
                 '96 hour po','po day 4','96 hours post-op','postoperative day 4','96hrs post-op','96h Post-Op (Discharge)', '96h Post-Op', '96h Post-op', '96 Hours Post-Op', '96 hours PO', 
-                'Post Operative Day 4', 'Postoperative Day 4', '96hr Post-op'],
+                'Post Operative Day 4', 'Postoperative Day 4', '96hr Post-op','Pre-OP Stage 2'],
 
 
             "POD5": ['pod 5','POD5','POD 5','Day 5 post-op','PO Day 5','Day 5 Post-Op','Day 5 post op','Day 5 Post-op',
@@ -144,7 +144,7 @@ class RedcapProcessor:
             "Month6": ['6 months']
         }
 
-        ### PRE_OP_DOAC
+        ### PRE_OP_medication
         self.medications = {
             **dict.fromkeys(
                     ['HPA-001', 'HPA-004', 'HPA-008', 'HPA-009', 'HPA-010',
@@ -157,13 +157,30 @@ class RedcapProcessor:
                     'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "DOAC"),
             **dict.fromkeys(['TH-244'], 'Warfarin'),
             **dict.fromkeys(['TH-006','TH-008','TH-011','TH-013','TH-023','TH-025','TH-026','TH-028','TH-031','TH-035','TH-038','TH-041','TH-046','TH-059','TH-066','TH-072','TH-082','TH-086','TH-090','TH-092','TH-093','TH-100',
-                             'TH-102','TH-103','TH-104','TH-105','TH-116','TH-126','TH-127','TH-128','TH-133','TH-139','TH-185','TH-258','TH-301','TH-305','TF-005','TF-038','TF-059','TF-071','TF-109','TF-121','TPA-019', 'TPA-085'],'ASA'),
+                             'TH-102','TH-105','TH-116','TH-126','TH-127','TH-128','TH-133','TH-139','TH-185','TH-258','TH-301','TH-305','TF-005','TF-038','TF-059','TF-071','TF-109','TF-121','TF-136','TPA-019', 'TPA-085'],'ASA'),
             **dict.fromkeys(['TH-004','TH-010','TH-075','TH-110'], 'Missing')
         }
 
-        ### POST_OP_DOAC
+        ### POST_OP_medication
+        # TF 042, TF 128 'TPA-010','TPA-058','TPA-082','TPA-093',TPA-100' are on DOAC post-operatively.
+        # TF 027, TF 039, TF 042, TF 059, TF 073, TF 120, TF 128,  'TPA-055','TPA-056','TPA-058','TPA-073','TPA-082','TPA-089','TPA-095','TPA-097' are on DOAC at follow-up. 
+
+
+
         self.medications_postop = {
-            **dict.fromkeys(['TF-042','TF-128','TF-027','TF-039','TF-042','TF-059','TF-073','TF-120','TF-128','TPA-010','TPA-058','TPA-082','TPA-093','TPA-100','TPA-055','TPA-056','TPA-058','TPA-073','TPA-082','TPA-089','TPA-095','TPA-097'], "DOAC"),
+            **dict.fromkeys(['TF-042','TF-128','TF-027','TF-039','TF-059','TF-073','TF-120',
+                             
+                             'TPA-010','TPA-055','TPA-056','TPA-058','TPA-073','TPA-082','TPA-089','TPA-095','TPA-097','TPA-093','TPA-100',
+
+                             'HPA-001', 'HPA-004', 'HPA-008', 'HPA-009', 'HPA-010',
+                             'HPA-012', 'HPA-014', 'HPA-015', 'HPA-016', 'HPA-017', 'HPA-019',
+                             'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
+                             'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
+                             'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
+                             'HPA-051','HPA-052',
+
+                             'TH-162','TH-170',' TH-198', 'TH-212', 'TH-217', 'TH-225', 'TH-227', 'TH-236', 'TH-240', 'TH-244','TH-255', 'TH-262', 'TH-267','TH-271' ,'TH-274', 'TH-284', 'TH-302'], "DOAC"),
+
             **dict.fromkeys(['TH-036','TH-042','TH-043','TH-044','TH-062','TH-068','TH-073','TH-083','TH-135','TH-170','TH-180','TH-215','TH-221','TH-273','TH-299'],'ASA'),
             **dict.fromkeys(['TH-133', 'TH-246', 'TH-258', 'TH-276', 'TH-305', 'TH-259'],'ASA+LMWH'),}
 
@@ -202,9 +219,9 @@ class RedcapProcessor:
         # }
 
         # ---- Define metadata and lab columns ----
-        self.metadata_cols = ['StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
+        self.metadata_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
                               'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection','Pre_op_med','time_injury_to_surgery_hours']
-        self.lab_cols = ['StudyID', 'Time', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg']
+        self.lab_cols = ['Study','StudyID', 'Time', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg']
 
         
         # Placeholder for processed DataFrame
@@ -258,12 +275,13 @@ class RedcapProcessor:
                 'TF-084': 'Multiple Surgery Patient_bilateral femur fracture',
                 'TF-115': 'Multiple Surgery Patient_bilateral femur fracture',
 
-                'TPA-019': 'Multiple Surgery Patient',
-                'TPA-028': 'Multiple Surgery Patient',
-                'TPA-043': 'Multiple Surgery Patient',
-                'TPA-048': 'Multiple Surgery Patient',
-                'TPA-056': 'Multiple Surgery Patient',
-                'TPA-079': 'Multiple Surgery Patient'
+                'TPA-019': 'Two stage surgeries related to pelvis/acetabulum - 30 April 2021',
+                'TPA-028': 'Two stage surgeries related to pelvis/acetabulum - 6th and 11th April 2021',
+                'TPA-035': 'Multiple Surgery Patient: both pelvic and femur surgery on October 19, and another pelvic surgery on October 26, 2021',
+                'TPA-043': 'Two stage surgeries related to pelvis/acetabulum - 4th and 6th April 2022',
+                'TPA-048': 'Two stage surgeries related to pelvis/acetabulum - 6th and 10th May 2022',
+                'TPA-056': 'Two stage surgeries related to pelvis/acetabulum - DATES ********************************** PREVIOUSLY MARKED AS ONE STAGE_LOOK ONENOTE??',
+                'TPA-079': 'Two stage surgeries related to pelvis/acetabulum - 6th and 12th Feb 2024'
             }
 
             to_remove = list(to_remove_reasons.keys())
@@ -487,7 +505,7 @@ class RedcapProcessor:
 
             # Withdrawn rows
             withdrew_mask = df['Withdrawn_norm'].isin(withdrew_values) & ~death_mask
-            df.loc[withdrew_mask, 'Withdrawn'] = 'Withdrew'
+            df.loc[withdrew_mask, 'Withdrawn'] = 'Yes'
 
             # All other rows
             df.loc[~death_mask & ~withdrew_mask, 'Withdrawn'] = 'No'
@@ -518,8 +536,8 @@ class RedcapProcessor:
         for study_id, group in df.groupby('StudyID'):
             if (group['Death'] == 'Yes').any():
                 df.loc[df['StudyID'] == study_id, ['Death', 'Withdrawn']] = ['Yes', 'No']
-            elif (group['Withdrawn'] == 'Withdrew').any():
-                df.loc[df['StudyID'] == study_id, 'Withdrawn'] = 'Withdrew'
+            elif (group['Withdrawn'] == 'Yes').any():
+                df.loc[df['StudyID'] == study_id, 'Withdrawn'] = 'Yes'
 
         
         treatment_map = {
@@ -649,11 +667,22 @@ class RedcapProcessor:
         )
 
 
+    # Create a study column with study names
+        df['Study'] = df['StudyID'].str.extract(r'^(TH|HPA|TF|TPA)').replace({
+                'TH': 'Hip',
+                'HPA': 'Pathway',
+                'TF': 'Femur',
+                'TPA': 'Pelvis'
+            })
+
+
         # Step 7: Save the processed DataFrame
-        print(df['StudyID'].nunique())
+        print('=================================================================================')
+        print('Total Number of Patients Included:',df['StudyID'].nunique())
 
         # Step 8: Build Record objects
         self._build_records()
+
 
         self.df = df
 
@@ -705,9 +734,10 @@ class RedcapProcessor:
 
             # Save Record
             # self.records[study_id] = Record(study_id, demographics=demo_dict, blood_draws=blood_draws)
-            rec = Record(study_id, demographics=demo_dict, blood_draws=blood_draws)
+            rec = Record(study_id,demographics=demo_dict, blood_draws=blood_draws) #######
             rec.add_time_differences()  # <-- calculate once per patient
             self.records[study_id] = rec
+            
 
     # ------------------------------------------------------------------------------
     # Get demographics for a patient
@@ -775,8 +805,6 @@ class RedcapProcessor:
     # ------------------------------------------------------------------------------
     # Get all blood draws for all patients
     # ------------------------------------------------------------------------------
-
-
     
     def get_all_blood_draws(self):
         all_draws = []
@@ -819,6 +847,21 @@ class RedcapProcessor:
                 all_draws.append(row)
 
         df_all = pd.DataFrame(all_draws)
+
+        #Handling Exceptions:
+        # TPA-073 doesn't have second surgery (Blood is drawn, but patient didn't go to second surgery, so these blood drawns are excluded)
+        # TPA-046 Pre-op timpoint dont match up with the correct dates -deleted
+        filter = (df_all['StudyID'].isin(['TPA-046','TPA-073']))&(df_all['Time']=='Pre-Op')
+        df_all = df_all[~filter].copy()
+
+
+        df_all['Study'] = df_all['StudyID'].str.extract(r'^(TH|HPA|TF|TPA)')[0].replace({
+            'TH': 'Hip',
+            'HPA': 'Pathway',
+            'TF': 'Femur',
+            'TPA': 'Pelvis'
+            })
+
         return df_all
     
 # -----------------------
