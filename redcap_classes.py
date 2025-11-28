@@ -158,7 +158,7 @@ class RedcapProcessor:
             **dict.fromkeys(['TH-244'], 'Warfarin'),
             **dict.fromkeys(['TH-006','TH-008','TH-011','TH-013','TH-023','TH-025','TH-026','TH-028','TH-031','TH-035','TH-038','TH-041','TH-046','TH-059','TH-066','TH-072','TH-082','TH-086','TH-090','TH-092','TH-093','TH-100',
                              'TH-102','TH-105','TH-116','TH-126','TH-127','TH-128','TH-133','TH-139','TH-185','TH-258','TH-301','TH-305','TF-005','TF-038','TF-059','TF-071','TF-109','TF-121','TF-136','TPA-019', 'TPA-085'],'ASA'),
-            **dict.fromkeys(['TH-004','TH-010','TH-075','TH-110'], 'Missing')
+            **dict.fromkeys(['TH-004','TH-010','TH-075','TH-110'], 'MIS')
         }
 
         ### POST_OP_medication
@@ -222,7 +222,7 @@ class RedcapProcessor:
         self.metadata_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
                               'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection','Pre_op_med','time_injury_to_surgery_hours',
                               'total_blood_rbc','blood_rbc_yn']
-        self.lab_cols = ['Study','StudyID', 'Time','CAS', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg','Pre_op_med']
+        self.lab_cols = ['Study','StudyID', 'Time','CAS','VTE_type','VTE', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg','Pre_op_med','injury_to_lab_hrs']
         
         # Placeholder for processed DataFrame
         self.df = None
@@ -826,71 +826,90 @@ class RedcapProcessor:
     # ------------------------------------------------------------------------------
     # Get all blood draws for all patients
     # ------------------------------------------------------------------------------
-    
     def get_all_blood_draws(self):
         all_draws = []
 
         for rec in self.records.values():
+
+            # --- Patient-level info ---
             demo = rec.get_demographics()
-            injury_date = pd.to_datetime(demo.get('Injury_date', pd.NA), errors='coerce')
+            injury_date  = pd.to_datetime(demo.get('Injury_date',  pd.NA), errors='coerce')
             surgery_date = pd.to_datetime(demo.get('Surgery_date', pd.NA), errors='coerce')
 
-            cols = [c for c in self.lab_cols if c in self.df.columns]
-            all_draws = self.df[cols].copy()
-            
-
-
-
-
             dvt_flag = demo.get('DVT', 'No')
-            pe_flag  = demo.get('PE', 'No')
+            pe_flag  = demo.get('PE',  'No')
 
-
+            # Loop through blood draws for this record
             for bd in rec.blood_draws:
+
                 row = {"StudyID": rec.study_id}
                 row.update(bd.labs)
 
-                # Ensure draw date columns exist
+                # Ensure keys exist
                 row['Draw_date_lab'] = row.get('Draw_date_lab', pd.NA)
                 row['Draw_date_teg'] = row.get('Draw_date_teg', pd.NA)
 
-                # Convert to datetime
+                # Convert dates
                 draw_lab = pd.to_datetime(row['Draw_date_lab'], errors='coerce')
                 draw_teg = pd.to_datetime(row['Draw_date_teg'], errors='coerce')
 
-                # Compute hours from injury
-                row['injury_to_lab_hrs'] = ((draw_lab - injury_date).total_seconds()/3600) if pd.notnull(draw_lab) and pd.notnull(injury_date) else pd.NA
-                row['injury_to_teg_hrs'] = ((draw_teg - injury_date).total_seconds()/3600) if pd.notnull(draw_teg) and pd.notnull(injury_date) else pd.NA
+                # --- Time deltas ---
+                row['injury_to_lab_hrs'] = (
+                    (draw_lab - injury_date).total_seconds() / 3600
+                    if pd.notnull(draw_lab) and pd.notnull(injury_date)
+                    else pd.NA
+                )
 
-                # Compute hours from surgery
-                row['surgery_to_lab_hrs'] = ((draw_lab - surgery_date).total_seconds()/3600) if pd.notnull(draw_lab) and pd.notnull(surgery_date) else pd.NA
-                row['surgery_to_teg_hrs'] = ((draw_teg - surgery_date).total_seconds()/3600) if pd.notnull(draw_teg) and pd.notnull(surgery_date) else pd.NA
+                row['injury_to_teg_hrs'] = (
+                    (draw_teg - injury_date).total_seconds() / 3600
+                    if pd.notnull(draw_teg) and pd.notnull(injury_date)
+                    else pd.NA
+                )
 
-                # Add patient-level info
+                row['surgery_to_lab_hrs'] = (
+                    (draw_lab - surgery_date).total_seconds() / 3600
+                    if pd.notnull(draw_lab) and pd.notnull(surgery_date)
+                    else pd.NA
+                )
+
+                row['surgery_to_teg_hrs'] = (
+                    (draw_teg - surgery_date).total_seconds() / 3600
+                    if pd.notnull(draw_teg) and pd.notnull(surgery_date)
+                    else pd.NA
+                )
+
+                # Patient-level info
                 row["Pre_op_med"] = self.medications.get(rec.study_id, 'No')
                 row["Injury_date"] = injury_date
                 row["Surgery_date"] = surgery_date
-             
+                row["DVT"] = dvt_flag
+                row["PE"] = pe_flag
 
-                all_draws = self.df[cols].copy()
+                # Save row
+                all_draws.append(row)
 
+        # Convert to DataFrame AFTER building all rows
         df_all = pd.DataFrame(all_draws)
 
-        #Handling Exceptions:
-        # TPA-073 doesn't have second surgery (Blood is drawn, but patient didn't go to second surgery, so these blood drawns are excluded)
-        # TPA-046 Pre-op timpoint dont match up with the correct dates -deleted
-        filter = (df_all['StudyID'].isin(['TPA-046','TPA-073']))&(df_all['Time']=='Pre-Op')
-        df_all = df_all[~filter].copy()
+        # --- Exclusions ---
+        mask = (df_all['StudyID'].isin(['TPA-046', 'TPA-073'])) & (df_all['Time'] == 'Pre-Op')
+        df_all = df_all[~mask].copy()
 
-
-        df_all['Study'] = df_all['StudyID'].str.extract(r'^(TH|HPA|TF|TPA)')[0].replace({
-            'TH': 'Hip',
-            'HPA': 'Pathway',
-            'TF': 'Femur',
-            'TPA': 'Pelvis'
+        # --- Study name mapping ---
+        df_all['Study'] = (
+            df_all['StudyID']
+            .str.extract(r'^(TH|HPA|TF|TPA)')[0]
+            .replace({
+                'TH': 'Hip',
+                'HPA': 'Pathway',
+                'TF': 'Femur',
+                'TPA': 'Pelvis'
             })
+        )
 
         return df_all
+
+    
     
 # -----------------------
 # BloodDraw and Record classes
