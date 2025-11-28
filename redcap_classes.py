@@ -21,20 +21,20 @@ class RedcapProcessor:
             ("demo_sex", "bl_sex","baseline_sex"): "Sex",
             ("bmi_calc", "bl_bmi_calc","baseline_bmi","bl_bmi"): "BMI",
             ("bloodwork_hemoglobin", "lp_hemoglobin","blood_work_hemoglobin","lp_hemoglobin","teg_hgb",): "Hemoglobin",
-            ("bloodwork_creatinine", "lp_creatinine","blood_work_creatinine","lp_creatinine","teg_creatinine"): "Creatinine",
-            ("bloodwork_teg_crt_r", "rteg_crt_rvalue","blood_work_teg_crt_r","crt_rvalue","teg_crt_r",): "R_time",
-            ("bloodwork_teg_crt_k", "rteg_crt_ktime","blood_work_teg_crt_k","crt_ktime","teg_crt_k"): "K_time",
-            ("bloodwork_teg_crt_ang", "rteg_crt_aangle","blood_work_teg_crt_ang","crt_alpha","teg_crt_aangle"): "Alpha_Angle",
-            ("bloodwork_teg_crt_ma", "rteg_crt_ma","blood_work_teg_crt_ma","crt_ma","teg_crt_ma",): "MA",
-            ("bloodwork_teg_crt_ly30", "rteg_crt_ly30","blood_work_teg_crt_ly30","crt_ly30","teg_crt_ly30"): "LY30",
-            ("bloodwork_teg_crt_act", "rteg_crt_tegact","blood_work_teg_crt_act","crt_act","teg_crt_tegact"): "ACT",
-            ("blood_work_teg_adp_agg","pm_adp_aggregation","teg_adp_agg"): "ADP-agg",
-            ("blood_work_teg_adp_inh","pm_adp_inhibition","teg_adp_inh"): "ADP-inh",
-            ("blood_work_teg_adp_ma","pm_adp_ma","teg_adp_ma"): "ADP-ma",
-            ("blood_work_teg_aa_agg","pm_aa_aggregation","teg_aa_agg"): "AA-agg",
-            ("blood_work_teg_aa_inh","pm_aa_inhibition","teg_aa_inh"): "AA-inh",
-            ("blood_work_teg_aa_ma","pm_aa_ma","teg_aa_ma"): "AA-ma",
-            ("blood_products_rbc","blood_rbc",): "rbc",
+            ("bloodwork_creatinine", "lp_creatinine","teg_creatinine"): "Creatinine",
+            ("bloodwork_teg_crt_r", "rteg_crt_rvalue","crt_rvalue","teg_crt_r",): "R_time",
+            ("bloodwork_teg_crt_k", "rteg_crt_ktime","crt_ktime","teg_crt_k"): "K_time",
+            ("bloodwork_teg_crt_ang", "rteg_crt_aangle","crt_alpha","teg_crt_aangle"): "Alpha_Angle",
+            ("bloodwork_teg_crt_ma", "rteg_crt_ma","crt_ma","teg_crt_ma",): "MA",
+            ("bloodwork_teg_crt_ly30", "rteg_crt_ly30","crt_ly30","teg_crt_ly30"): "LY30",
+            ("bloodwork_teg_crt_act", "rteg_crt_tegact","crt_act","teg_crt_tegact"): "ACT",
+            ("bloodwork_teg_adp_agg","pm_adp_aggregation","teg_adp_agg","pm_adp_agg",): "ADP-agg",
+            ("bloodwork_teg_adp_inh","pm_adp_inhibition","teg_adp_inh","pm_adp_inh",): "ADP-inh",
+            ("bloodwork_teg_adp_ma","pm_adp_ma","teg_adp_ma","pm_adp_ma"): "ADP-ma",
+            ("bloodwork_teg_aa_agg","pm_aa_aggregation","teg_aa_agg","pm_aa_agg"): "AA-agg",
+            ("bloodwork_teg_aa_inh","pm_aa_inhibition","teg_aa_inh","pm_aa_inh"): "AA-inh",
+            ("bloodwork_teg_aa_ma","pm_aa_ma","teg_aa_ma",'pm_aa_ma',): "AA-ma",
+            ("blood_rbc",): "blood_rbc",
             ("lab_rteg_timepoint","bloodwork_timepoint","blood_work_timepoint","rteg_timepoint"):'Time',
             ('date_time_injury','adm_injury_date','date_injury'):'Injury_date',
             ('admission_date_time','adm_er_date','adm_date'): "Admission_date", 
@@ -53,11 +53,11 @@ class RedcapProcessor:
             ('pulmonary','bl_comorbidity_check___4','bl_comorbidities___4',):'comorbidty_pulmonary',
             ('prior_stroke','bl_comorbidity_check___5','bl_comorbidities___5',):'comorbidty_stroke',
             ('current_smoker',):'comorbidty_current_smoker',
-
-
             ('pulmonary_yesno','comp_pulmonary','comp_pulmonary_yn'): 'complication_pulmonary',
             ('cardio_yesno','comp_cardio','comp_cardio_yn',): 'complication_cardiovascular',
             ('infection_yesno','comp_infection','comp_infection_yn',): 'complication_infection',
+            ('cas_score',):'CAS',
+            ('cas_timepoint',):'cas_timepoint',
         }
 
         # ---- Timepoint dictionary ----
@@ -177,7 +177,7 @@ class RedcapProcessor:
                              'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
                              'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
                              'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
-                             'HPA-051','HPA-052',
+                             'HPA-051','HPA-052','HPA-053'
 
                              'TH-162','TH-170',' TH-198', 'TH-212', 'TH-217', 'TH-225', 'TH-227', 'TH-236', 'TH-240', 'TH-244','TH-255', 'TH-262', 'TH-267','TH-271' ,'TH-274', 'TH-284', 'TH-302'], "DOAC"),
 
@@ -220,9 +220,9 @@ class RedcapProcessor:
 
         # ---- Define metadata and lab columns ----
         self.metadata_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
-                              'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection','Pre_op_med','time_injury_to_surgery_hours']
-        self.lab_cols = ['Study','StudyID', 'Time', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg']
-
+                              'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection','Pre_op_med','time_injury_to_surgery_hours',
+                              'total_blood_rbc','blood_rbc_yn']
+        self.lab_cols = ['Study','StudyID', 'Time','CAS', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg','Pre_op_med']
         
         # Placeholder for processed DataFrame
         self.df = None
@@ -237,6 +237,7 @@ class RedcapProcessor:
         # Step 1: Export REDCap records
         records_data = self.project.export_records(raw_or_label='label')
         df = pd.DataFrame(records_data)
+
 
         # Step 2: Replace empty strings with NaN
         df = df.replace(r'^\s*$', np.nan, regex=True)
@@ -280,7 +281,7 @@ class RedcapProcessor:
                 'TPA-035': 'Multiple Surgery Patient: both pelvic and femur surgery on October 19, and another pelvic surgery on October 26, 2021',
                 'TPA-043': 'Two stage surgeries related to pelvis/acetabulum - 4th and 6th April 2022',
                 'TPA-048': 'Two stage surgeries related to pelvis/acetabulum - 6th and 10th May 2022',
-                'TPA-056': 'Two stage surgeries related to pelvis/acetabulum - DATES ********************************** PREVIOUSLY MARKED AS ONE STAGE_LOOK ONENOTE??',
+                # 'TPA-056': 'Two stage surgeries related to pelvis/acetabulum - DATES ********************************** PREVIOUSLY MARKED AS ONE STAGE_LOOK ONENOTE??',
                 'TPA-079': 'Two stage surgeries related to pelvis/acetabulum - 6th and 12th Feb 2024'
             }
 
@@ -301,6 +302,9 @@ class RedcapProcessor:
         df = df.replace({'Participant Withdrawn':np.nan})
         
         df['StudyID'] = df['StudyID'].astype(str).str.strip()
+
+       
+
         
         # if 'Admission_date' in df.columns:
         #     df.loc[df['Admission_date'] == 'Participant Withdrawn', 'Admission_date'] = np.nan
@@ -348,6 +352,8 @@ class RedcapProcessor:
 
         # Optional: VTE summary
         df['VTE'] = np.where(df['VTE_type'].notnull(), 'Yes', 'No')
+
+        
 
 
         # --- Step 4: Assign to self.df and replacing missing values ---
@@ -590,6 +596,8 @@ class RedcapProcessor:
         if 'Time' in df.columns:
             df['Time'] = df['Time'].apply(self._map_timepoint)
 
+    
+
         # Step 6: Ensure all metadata columns exist
         for col in self.metadata_cols:
             if col not in df.columns:
@@ -666,7 +674,13 @@ class RedcapProcessor:
             (df['Surgery_date'] - df['Injury_date']).dt.total_seconds() / 3600
         )
 
-
+    # ---- Blood Transfusions ----
+        df['blood_rbc'] = pd.to_numeric(df['blood_rbc'], errors='coerce').fillna(0)
+        total_blood_transfusions = df.groupby('StudyID')['blood_rbc'].sum().to_dict()
+        
+        df['total_blood_rbc'] = df['StudyID'].map(total_blood_transfusions)
+        df['blood_rbc_yn'] = np.where(df['total_blood_rbc']==0, 'No','Yes')
+        
     # Create a study column with study names
         df['Study'] = df['StudyID'].str.extract(r'^(TH|HPA|TF|TPA)').replace({
                 'TH': 'Hip',
@@ -674,6 +688,21 @@ class RedcapProcessor:
                 'TF': 'Femur',
                 'TPA': 'Pelvis'
             })
+        if 'CAS' not in df.columns:
+            df['CAS'] = np.nan
+
+        if 'cas_timepoint' in df.columns:
+                    df['cas_timepoint']=df['cas_timepoint'].apply(self._map_timepoint)
+                    # Ensure CAS is numeric
+                    df['CAS'] = pd.to_numeric(df['CAS'], errors='coerce')
+
+                    df_cas = df.dropna(subset=['CAS'])[['StudyID','cas_timepoint','CAS']].rename(columns={'cas_timepoint':'Time'})
+                    
+
+                    df = df.drop(columns=['CAS','cas_timepoint']).merge(df_cas, on=['StudyID', 'Time'], how='left')
+
+
+        
 
 
         # Step 7: Save the processed DataFrame
@@ -689,14 +718,12 @@ class RedcapProcessor:
         return self.df
 
 
-    
-
     # -----------------------
     # Replace Missing Values
     # -----------------------
     def _replace_missing_values(self):
         """Convert common REDCap missing codes to NaN"""
-        missing_values = ['None', '-999', '', 'NaN', None]
+        missing_values = ['None', '-999', '', 'NaN','Not applicable', None] #'Not applicable'
         self.df.replace(missing_values, np.nan, inplace=True)
 
 
@@ -725,9 +752,14 @@ class RedcapProcessor:
             demo_dict = demo.to_dict()
 
             blood_draws = []
+
+            lab_cols_available = [c for c in self.lab_cols if c in rows.columns]
+            # for _, row in rows.iterrows():
+            #     if pd.notnull(row.get("Draw_date")):
+            #         bd_data = row[self.lab_cols].to_dict()
             for _, row in rows.iterrows():
                 if pd.notnull(row.get("Draw_date")):
-                    bd_data = row[self.lab_cols].to_dict()
+                    bd_data = row[lab_cols_available].to_dict()
                     bd_data["Draw_date"] = row["Draw_date"]
                     blood_draws.append(BloodDraw(row["Draw_date"], **bd_data))
 
@@ -783,25 +815,14 @@ class RedcapProcessor:
     # Get patient blood draws
     # ------------------------------------------------------------------------------
     def get_patient_blood_draws(self, study_id):
-        rec = self.records.get(study_id)
-        if not rec:
-            return pd.DataFrame()
+        """Display just the blooddraws for a single patient with StudyID as header, return None."""
+        df_blood_draws = self.get_all_blood_draws()
+        patient_blood_draws = df_blood_draws[df_blood_draws['StudyID'] == study_id].copy()
+        display(patient_blood_draws)
+        
+        return None
 
-        demo = rec.get_demographics()
-        injury_date = demo.get('Injury_date', pd.NA)
-        surgery_date = demo.get('Surgery_date', pd.NA)
-
-        rows = []
-        for bd in rec.blood_draws:
-            row = {"StudyID": rec.study_id}
-            row.update(bd.labs)
-            row["Injury_date"] = injury_date
-            row["Surgery_date"] = surgery_date
-            rows.append(row)
-
-        return pd.DataFrame(rows)
-       
-
+    
     # ------------------------------------------------------------------------------
     # Get all blood draws for all patients
     # ------------------------------------------------------------------------------
@@ -813,6 +834,14 @@ class RedcapProcessor:
             demo = rec.get_demographics()
             injury_date = pd.to_datetime(demo.get('Injury_date', pd.NA), errors='coerce')
             surgery_date = pd.to_datetime(demo.get('Surgery_date', pd.NA), errors='coerce')
+
+            cols = [c for c in self.lab_cols if c in self.df.columns]
+            all_draws = self.df[cols].copy()
+            
+
+
+
+
             dvt_flag = demo.get('DVT', 'No')
             pe_flag  = demo.get('PE', 'No')
 
@@ -841,10 +870,9 @@ class RedcapProcessor:
                 row["Pre_op_med"] = self.medications.get(rec.study_id, 'No')
                 row["Injury_date"] = injury_date
                 row["Surgery_date"] = surgery_date
-
              
 
-                all_draws.append(row)
+                all_draws = self.df[cols].copy()
 
         df_all = pd.DataFrame(all_draws)
 
