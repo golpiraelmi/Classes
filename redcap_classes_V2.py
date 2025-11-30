@@ -211,10 +211,12 @@ class RedcapProcessor:
         
 
         # ---- Columns to be added to demographic or blood analyses
-        self.dempgraphic_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
+        self.demographic_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
                               'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection','Pre_op_med','time_injury_to_surgery_hours',
                               'total_blood_rbc','blood_rbc_yn']
-        self.lab_cols = ['Study','StudyID', 'Time','CAS','VTE_type','VTE', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma', 'Injury_date','Surgery_date', 'Draw_date_lab', 'Draw_date_teg','Pre_op_med','injury_to_lab_hrs']
+        
+        
+        self.lab_cols = ['Study','StudyID', 'Time','CAS','cas_timepoint','VTE_type','VTE', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma',  'Draw_date_lab', 'Draw_date_teg','Pre_op_med','injury_to_lab_hrs']
         
         # Placeholder for processed DataFrame
         self.df = None
@@ -235,7 +237,7 @@ class RedcapProcessor:
         self._process_comorbidities_complications()
         self._assign_timepoints()
         # # self._compute_cas()
-        self._fill_missing_values()
+        # self._fill_missing_values()
         self._build_records()
 
         return self.df
@@ -437,19 +439,6 @@ class RedcapProcessor:
         print('Step11')
 
     # ----------------------------------------------------------
-    # STEP 12: Filling missing values
-    # ----------------------------------------------------------
-    def _fill_missing_values(self):
-        # Forward/backward fill
-        self.df = self.df.sort_values('StudyID').reset_index(drop=True)
-        self.df['Age'] = self.df.groupby('StudyID')['Age'].transform(lambda x: x.ffill().bfill()) ## LATER SHOULD BE FILLED FOR ALL DEMOGRAPHIC COLUMNS
-        # self.df[self.dempgraphic_cols] = self.df.groupby('StudyID')[self.dempgraphic_cols].transform(lambda x: x.ffill().bfill()) 
-
-        print('Step12')
-
-
-
-    # ----------------------------------------------------------
     # STEP 11: Get CAS-score
     # ----------------------------------------------------------
     # def _compute_cas(self):
@@ -461,21 +450,99 @@ class RedcapProcessor:
     #     print('Step11')
     
     
+
+
+    # ----------------------------------------------------------
+    # STEP 12: Build records
+    # ----------------------------------------------------------
+    def _build_records(self):
+        """
+        Build Record objects (not DataFrames).
+        Later, you can convert them to DataFrames with record.to_dataframe().
+        """
+        self.records = {}
+
+        for study_id, rows in self.df.groupby("StudyID"):
+
+            # ------------------------------
+            # 1. EXTRACT DEMOGRAPHICS
+            # ------------------------------
+            demo = {}
+            for col in self.demographic_cols:
+                if col in rows.columns:
+                    values = rows[col].dropna()
+                    demo[col] = values.iloc[0] if len(values) > 0 else None
+
+            # ------------------------------
+            # 2. BUILD BLOOD DRAW OBJECTS
+            # ------------------------------
+            blood_draws = []
+
+            for _, row in rows.iterrows():
+                labs = {col: row[col] for col in self.lab_cols if col in row.index}
+
+                # skip rows where all labs are NA
+                if not any(pd.notna(v) for v in labs.values()):
+                    continue
+
+                # draw_id = row.get("Draw_ID", None)
+                draw_id = "_".join(
+                    str(row.get(col, "")) 
+                    for col in ["redcap_event_name", "redcap_repeat_instrument", "redcap_repeat_instance"]
+                ).strip("_")
+
+                blood_draws.append(BloodDraw(draw_id=draw_id, **labs))
+
+            # ------------------------------
+            # 3. CREATE RECORD OBJECT
+            # ------------------------------
+            record = Record(
+                record_id=study_id,
+                demographics=demo,
+                blood_draws=blood_draws
+            )
+
+            # compute time differences inside the record
+            record.add_time_differences()
+
+            self.records[study_id] = record
+
+        print("Step12: Records Successfully Built!")
+
+
+##########################
+    def get_all_demographics(self):
+        rows = []
+        for sid, rec in self.records.items():
+            row = rec.demographics.copy()
+            row["StudyID"] = sid
+            rows.append(row)
+        return pd.DataFrame(rows)
+
+
+    # ---------------------------------------------------
+    # ⭐ ALL LABS-ONLY (all records) as one DataFrame
+    # ---------------------------------------------------
+    def get_all_labs(self):
+        dfs = [rec.to_lab_dataframe() for rec in self.records.values()]
+        dfs = [df for df in dfs if not df.empty]
+        if len(dfs) == 0:
+            return pd.DataFrame()
+        return pd.concat(dfs, ignore_index=True)
+
+
+    # ---------------------------------------------------
+    # ⭐ FULL MERGED DF (labs + demographics)
+    # ---------------------------------------------------
+    def get_full_dataframe(self):
+        dfs = [rec.to_dataframe() for rec in self.records.values()]
+        dfs = [df for df in dfs if not df.empty]
+        if len(dfs) == 0:
+            return pd.DataFrame()
+        return pd.concat(dfs, ignore_index=True)
     
 
-    # ----------------------------------------------------------
-    # STEP 13: Build records
-    # ----------------------------------------------------------
-
-    def _build_records(self):
-        self.records = {}
-        
-        for study_id, rows in self.df.groupby("StudyID"):
-            demo_dict = {col: (rows[col].dropna().iloc[0] if rows[col].dropna().any() else None)
-                        for col in rows.columns}
-            self.records[study_id] = demo_dict
-
-        print('Step13')
+   
 
 
 #     # --------------------------------------------------------------------------------------------------OLD CODE WORKED
@@ -1029,65 +1096,68 @@ class RedcapProcessor:
 # -----------------------
 # BloodDraw and Record classes
 # -----------------------
+
 class BloodDraw:
-    def __init__(self, draw_id, **labs):
+    def __init__(self, draw_id=None, **labs):
         self.draw_id = draw_id
-        self.labs = labs
 
-    def __repr__(self):
-        return f"BloodDraw(draw_id={self.draw_id}, labs={self.labs})"
-
+        # store all lab values dynamically
+        for k, v in labs.items():
+            setattr(self, k, v)
 
 
 class Record:
-    def __init__(self, record_id, demographics=None, blood_draws=None):
-        self.study_id = record_id
-        self.demographics = demographics or {}
-        self.blood_draws = blood_draws or []
+    def __init__(self, record_id, demographics, blood_draws):
+        self.record_id = record_id
+        self.demographics = demographics
+        self.blood_draws = blood_draws
+
+    # Your existing methods:
+    def add_time_differences(self):
+        pass
 
     def get_demographics(self):
         return self.demographics
 
-    def add_blood_draw(self, blood_draw):
-        self.blood_draws.append(blood_draw)
+    def get_all_labs(self):
+        return self.blood_draws
 
-    def add_time_differences(self):
-        """Compute hours from injury/surgery to TEG and LAB draw times."""
-    
-        # Convert demographic dates
-        injury_date = pd.to_datetime(self.demographics.get("Injury_date", None), errors="coerce")
-        surgery_date = pd.to_datetime(self.demographics.get("Surgery_date", None), errors="coerce")
+    # ---------------------------------------------------
+    # ⭐ NEW: Return demographics as a DataFrame
+    # ---------------------------------------------------
+    def to_demographics_dataframe(self):
+        df = pd.DataFrame([self.demographics])
+        df.insert(0, "StudyID", self.record_id)
+        return df
 
-        for bd in self.blood_draws:
-            # Convert draw times if they exist
-            draw_date_lab = pd.to_datetime(bd.labs.get("Draw_date_lab"), errors="coerce")
-            draw_date_teg = pd.to_datetime(bd.labs.get("Draw_date_teg"), errors="coerce")
+    # ---------------------------------------------------
+    # ⭐ NEW: Return labs-only as a DataFrame
+    # ---------------------------------------------------
+    def to_lab_dataframe(self):
+        """Each blood draw = one row; no demographics."""
+        if len(self.blood_draws) == 0:
+            return pd.DataFrame()
 
-            # Injury → LAB
-            if pd.notnull(injury_date) and pd.notnull(draw_date_lab):
-                bd.labs["injury_to_lab_hrs"] = (draw_date_lab - injury_date).total_seconds() / 3600
-            else:
-                bd.labs["injury_to_lab_hrs"] = np.nan
+        rows = []
+        for draw in self.blood_draws:
+            row = {"StudyID": self.record_id, "Draw_ID": draw.draw_id}
+            for k, v in draw.__dict__.items():
+                if k != "draw_id":   # avoid duplicating
+                    row[k] = v
+            rows.append(row)
 
-            # Injury → TEG
-            if pd.notnull(injury_date) and pd.notnull(draw_date_teg):
-                bd.labs["injury_to_teg_hrs"] = (draw_date_teg - injury_date).total_seconds() / 3600
-            else:
-                bd.labs["injury_to_teg_hrs"] = np.nan
+        return pd.DataFrame(rows)
 
-            # Surgery → LAB
-            if pd.notnull(surgery_date) and pd.notnull(draw_date_lab):
-                bd.labs["surgery_to_lab_hrs"] = (draw_date_lab - surgery_date).total_seconds() / 3600
-            else:
-                bd.labs["surgery_to_lab_hrs"] = np.nan
+    # ---------------------------------------------------
+    # ⭐ NEW: Full flattened DF = demographics + labs
+    # ---------------------------------------------------
+    def to_dataframe(self):
+        df_labs = self.to_lab_dataframe()
+        if df_labs.empty:
+            return pd.DataFrame()
 
-            # Surgery → TEG
-            if pd.notnull(surgery_date) and pd.notnull(draw_date_teg):
-                bd.labs["surgery_to_teg_hrs"] = (draw_date_teg - surgery_date).total_seconds() / 3600
-            else:
-                bd.labs["surgery_to_teg_hrs"] = np.nan
+        for col, val in self.demographics.items():
+            df_labs[col] = val
 
+        return df_labs
 
-
-    def __repr__(self):
-        return f"<Record {self.study_id}: {len(self.blood_draws)} blood draws>"
