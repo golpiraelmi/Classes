@@ -49,15 +49,15 @@ class RedcapProcessor:
             ('comp_pe_yn','complication_pe','outcomes_vte_type___2'):'PE',
             ('reason_withdrawal','wd_reason','study_wd_reason'): 'Withdrawn',
             ('outcomes_outcome_type___4','complication_death','comp_death_yn'):'comp_death',
-            ('diabetes','bl_comorbidity_check___1','bl_comorbidities___1',):'comorbidty_diabetes',
-            ('cancer','bl_comorbidity_check___2','bl_comorbidities___2',):'comorbidty_cancer',
-            ('cardiovascular','bl_comorbidity_check___3','bl_comorbidities___3',):'comorbidty_cardiovascular',
-            ('pulmonary','bl_comorbidity_check___4','bl_comorbidities___4',):'comorbidty_pulmonary',
-            ('prior_stroke','bl_comorbidity_check___5','bl_comorbidities___5',):'comorbidty_stroke',
+            ('diabetes','bl_comorbidity_check___1','bl_comorbidities___1',):'comorb_diabetes',
+            ('cancer','bl_comorbidity_check___2','bl_comorbidities___2',):'comorb_cancer',
+            ('cardiovascular','bl_comorbidity_check___3','bl_comorbidities___3',):'comorb_cardiovascular',
+            ('pulmonary','bl_comorbidity_check___4','bl_comorbidities___4',):'comorb_pulmonary',
+            ('prior_stroke','bl_comorbidity_check___5','bl_comorbidities___5',):'comorb_stroke',
             ('current_smoker',):'comorbidty_current_smoker',
-            ('pulmonary_yesno','comp_pulmonary','comp_pulmonary_yn'): 'complication_pulmonary',
-            ('cardio_yesno','comp_cardio','comp_cardio_yn',): 'complication_cardiovascular',
-            ('infection_yesno','comp_infection','comp_infection_yn',): 'complication_infection',
+            ('pulmonary_yesno','comp_pulmonary','comp_pulmonary_yn'): 'comp_pulmonary',
+            ('cardio_yesno','comp_cardio','comp_cardio_yn',): 'comp_cardiovascular',
+            ('infection_yesno','comp_infection','comp_infection_yn',): 'comp_infection',
             ('cas_score',):'CAS',
             ('cas_timepoint',):'cas_timepoint',
         }
@@ -154,13 +154,13 @@ class RedcapProcessor:
                     'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
                     'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
                     'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
-                    'HPA-051','HPA-052','TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
+                    'HPA-051','HPA-052','HPA-053','TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
                     'TH-225', 'TH-227', 'TH-236', 'TH-240','TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
                     'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "DOAC"),
             **dict.fromkeys(['TH-244'], 'Warfarin'),
             **dict.fromkeys(['TH-006','TH-008','TH-011','TH-013','TH-023','TH-025','TH-026','TH-028','TH-031','TH-035','TH-038','TH-041','TH-046','TH-059','TH-066','TH-072','TH-082','TH-086','TH-090','TH-092','TH-093','TH-100',
                              'TH-102','TH-105','TH-116','TH-126','TH-127','TH-128','TH-133','TH-139','TH-185','TH-258','TH-301','TH-305','TF-005','TF-038','TF-059','TF-071','TF-109','TF-121','TF-136','TPA-019', 'TPA-085'],'ASA'),
-            **dict.fromkeys(['TH-004','TH-010','TH-075','TH-110'], 'MIS')
+            **dict.fromkeys(['TH-004','TH-010','TH-075','TH-110'], 'No Info')
         }
 
          # ---- POST_OP_medication ----
@@ -211,8 +211,8 @@ class RedcapProcessor:
         
 
         # ---- Columns to be added to demographic or blood analyses
-        self.demographic_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorbidty_diabetes','comorbidty_cancer',
-                              'comorbidty_cardiovascular','comorbidty_pulmonary','comorbidty_stroke','complication_pulmonary', 'complication_cardiovascular','complication_infection','Pre_op_med','time_injury_to_surgery_hours',
+        self.demographic_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','comorb_diabetes','comorb_cancer',
+                              'comorb_cardiovascular','comorb_pulmonary','comorb_stroke','comp_pulmonary', 'comp_cardiovascular','comp_infection','Pre_op_med','time_injury_to_surgery_hours',
                               'total_blood_rbc','blood_rbc_yn']
         
         
@@ -230,15 +230,25 @@ class RedcapProcessor:
         self._drop_irrelevant_columns()
         self._replace_column_names()
         self._clean_studyids()
-        self._filter_studies()
+        self._filter_patients()
         self._filter_screening_status()
         self._process_vte_flags()
         self._replace_missing_values()
         self._process_comorbidities_complications()
         self._assign_timepoints()
-        # # self._compute_cas()
-        # self._fill_missing_values()
+        self._process_surgery_injury_dates()
+        self._times_to_analyses()
+        self._Process_AO_OTA()
+        self._Process_medication()
+        self._Process_Death_Withdrawals()
+        self._process_treatment()
+        self._add_blood_transfusion()
+        self._add_study_names()
+        self._compute_cas()
         self._build_records()
+
+        
+        # self._fill_missing_values()
 
         return self.df
 
@@ -248,8 +258,6 @@ class RedcapProcessor:
     def _fetch_records(self):
         records_data = self.project.export_records(raw_or_label='label')
         self.df = pd.DataFrame(records_data)
-        print('Step1')
-        
 
     # ----------------------------------------------------------
     # STEP 2: Clean basic data
@@ -257,7 +265,6 @@ class RedcapProcessor:
     def _clean_data(self):
         # Replace empty strings with NaN
         self.df = self.df.replace(r'^\s*$', np.nan, regex=True)
-        print('Step2')
 
     # ----------------------------------------------------------
     # STEP 3: Drop irrelevant columns
@@ -275,9 +282,6 @@ class RedcapProcessor:
 
         if 'screen_patient_id' in self.df.columns:
             self.df = self.df.rename(columns={'screen_patient_id': 'StudyID', 'record_id': 'index'})
-            print('We have index')
-
-        print('Step3')
 
     # ----------------------------------------------------------
     # STEP 4: Replace columns with replacement dictionary
@@ -289,10 +293,9 @@ class RedcapProcessor:
                 if k in self.df.columns:
                     col_mapping[k] = standard_name
         self.df = self.df.rename(columns=col_mapping)
-        print("Step4")
-
+  
     # ----------------------------------------------------------
-    # STEP 5: Clean StudyID, handle withdrawals, ffill/bfill
+    # STEP 5: Clean StudyID, handle withdrawals
     # ----------------------------------------------------------
     def _clean_studyids(self):
         if 'StudyID' not in self.df.columns:
@@ -300,12 +303,11 @@ class RedcapProcessor:
         
         self.df = self.df.replace({'Participant Withdrawn': np.nan})
         self.df['StudyID'] = self.df['StudyID'].astype(str).str.strip()
-        print('Step5')
 
     # ----------------------------------------------------------
-    # STEP 6: Filter unwanted studies
+    # STEP 6: Filter unwanted patients
     # ----------------------------------------------------------
-    def _filter_studies(self):
+    def _filter_patients(self):
         if 'StudyID' not in self.df.columns:
             return
 
@@ -333,24 +335,46 @@ class RedcapProcessor:
                 print(f" - {sid}: {reason}")
             self.df = self.df[~present_to_remove].copy()
         
-        print('Step6')
-
     # ----------------------------------------------------------
     # STEP 7: Filter by screening_status
     # ----------------------------------------------------------
     def _filter_screening_status(self):
+
+        # --- Create StudyID and index if screening columns exist ---
+        if 'screen_patient_id' in self.df.columns:
+            self.df = self.df.rename(columns={
+                'screen_patient_id': 'StudyID',
+                'record_id': 'index'
+            })
+
+        # --- Fill StudyID if index exists ---
         if 'index' in self.df.columns:
             self.df['index'] = self.df['index'].astype(str).str.strip()
             self.df['StudyID'] = self.df['StudyID'].replace('nan', np.nan)
             self.df['StudyID'] = self.df.groupby('index')['StudyID'].ffill().bfill()
-        
-        print("Step7")
-    
 
+        # --- Handle screening_status ---
+        if 'screening_status' in self.df.columns:
+            self.df['StudyID'] = self.df['StudyID'].astype(str)
+            self.df['StudyID'] = self.df.groupby('index')['StudyID'].ffill().bfill()
+            self.df['screening_status'] = self.df.groupby('index')['screening_status'].ffill().bfill()
+
+            # keep only eligible → enrolled
+            self.df = self.df[
+                self.df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled'
+            ]
     # ----------------------------------------------------------
     # STEP 8: Process VTE flags
     # ----------------------------------------------------------
     def _process_vte_flags(self):
+        if 'complication_dvt' in self.df.columns:
+            self.df['DVT'] = np.where(self.df['complication_dvt']=='Yes','DVT','No')
+
+
+        if 'complication_pe' in self.df.columns:
+            self.df['PE'] = np.where(self.df['complication_pe']=='Yes','PE','No')
+
+
         for col in ['DVT', 'PE']:
             # Convert to boolean: True if "Yes", False if "No" or missing
             self.df[col + '_bool'] = self.df[col].str.strip().str.lower().isin(['yes', 'checked'])
@@ -379,25 +403,30 @@ class RedcapProcessor:
 
         # Optional: VTE summary
         self.df['VTE'] = np.where(self.df['VTE_type'].notnull(), 'Yes', 'No')
-        print('Step8')
-
+      
     # ----------------------------------------------------------
     # STEP 9: Missing Values
     # ----------------------------------------------------------
     def _replace_missing_values(self):
         """Convert common REDCap missing codes to NaN"""
-        missing_values = ['None', '-999', '', 'NaN','Not applicable', None] #'Not applicable'
+        missing_values = ['None', '-999', '', 'NaN','Not applicable','-2997', None] #'Not applicable'
         self.df = self.df.replace(missing_values, np.nan)
-        
-        print('Step 9')
+       
     # ----------------------------------------------------------
     # STEP 10: Process comorbidities
     # ----------------------------------------------------------
     def _process_comorbidities_complications(self):
-        comorb_cols = ['comorbidty_diabetes', 'comorbidty_cancer', 'comorbidty_cardiovascular',
-                    'comorbidty_pulmonary', 'comorbidty_stroke']  
-        comp_cols = ['complication_pulmonary', 'complication_cardiovascular', 'complication_infection']
-        
+
+        self.df['StudyID'] = self.df['StudyID'].astype(str).str.strip().str.upper()
+        self.df = self.df.sort_values('StudyID').reset_index(drop=True)
+
+        COMORBIDITY_COMPLICATIONS = [
+            'comorb_diabetes','comorb_cancer','comorb_cardiovascular',
+            'comorb_pulmonary','comorb_stroke',
+            'comp_pulmonary','comp_cardiovascular','comp_infection'
+        ]
+
+        # Replace map
         replace_map = {
             'Checked': 'Yes',
             'Unchecked': 'No',
@@ -408,52 +437,326 @@ class RedcapProcessor:
             None: 'No'
         }
 
-        # Normalize all columns first
-        for col in comorb_cols + comp_cols:
+        for col in COMORBIDITY_COMPLICATIONS:
             if col in self.df.columns:
-                self.df[col] = self.df[col].astype(str).replace('nan', np.nan).str.strip()
-                self.df[col] = self.df[col].replace(replace_map)
+               
+               self.df.loc[:, col] = self.df.loc[:, col].astype(str).replace('nan', np.nan)  # convert to string, handle NaN
+               self.df.loc[:, col] = self.df.loc[:, col].str.strip()            # string operations
+               self.df.loc[:, col] = self.df.loc[:, col].replace(replace_map)              
             else:
-                self.df[col] = np.nan
+                self.df.loc[:, col] = np.nan
 
-        # Now join 'Yes' columns
-        self.df['Comorbidities'] = self.df[comorb_cols].apply(
-            lambda x: ','.join([c for c in x.index if x[c] == 'Yes']), axis=1
-        )
 
-        self.df['Complications'] = self.df[comp_cols].apply(
-            lambda x: ','.join([c for c in x.index if x[c] == 'Yes']), axis=1
-        )
-        print('Step10')
+
+        # Count 'Yes' per StudyID and set all accordingly
+        for col in COMORBIDITY_COMPLICATIONS:
+            self.df[col] = self.df.groupby('StudyID')[col].transform(lambda x: 'Yes' if (x == 'Yes').sum() >= 1 else 'No')
+
+        for col in COMORBIDITY_COMPLICATIONS:            
+            self.df[col]=self.df[col].replace(np.nan,'No')
+        
     # ----------------------------------------------------------
     # STEP 11: Process timepoints
     # ----------------------------------------------------------
     def _assign_timepoints(self):
+
+        # Merge multiple timepoint columns into a single 'Time' column (Pelvis)
+        timepoint_cols = ['teg_preop_tp', 'teg_postop_tp1','teg_postop_tp2', 'teg_fu_tp','teg_timepoint']
+        existing_timepoint_cols = [col for col in timepoint_cols if col in self.df.columns]
+
+        if existing_timepoint_cols:
+            # Take the first non-null value across the columns
+            self.df['Time'] = self.df[existing_timepoint_cols].bfill(axis=1).iloc[:, 0]
+
+
         if 'Time' in self.df.columns:
             # Create a lowercase mapping for all variations
             timepoint_dict_lower = {k.lower(): v for v_list in self.timepoint_dict.values() for k in v_list for v in [list(self.timepoint_dict.keys())[list(self.timepoint_dict.values()).index(v_list)]]}
 
             # Map using lowercase column values
             self.df['Time'] = self.df['Time'].astype(str).str.lower().map(timepoint_dict_lower)
-    
-        print('Step11')
 
     # ----------------------------------------------------------
-    # STEP 11: Get CAS-score
+    # STEP 12: Process Surgery/Injury date columns
     # ----------------------------------------------------------
-    # def _compute_cas(self):
-    #     # Example CAS computation combining multiple frailty scales
-    #     cfs_cols = ['very_fit','well','managing_well','vulnerable','mildly_frail','moderately_frail',
-    #                 'severely_frail','very_severely_frail','terminally_ill']
-    #     self.df['CAS'] = self.df[cfs_cols].apply(lambda x: next((val for val in x if pd.notna(val)), np.nan), axis=1)
+    def _process_surgery_injury_dates(self):
+        if any(col in self.df.columns for col in ['surg_date_pelvis','surg_date_ant_acet','surg_date_post_acet']):
 
-    #     print('Step11')
-    
-    
+            surg_date_cols = ['surg_date_pelvis', 'surg_date_ant_acet', 'surg_date_post_acet']
+            existing_surg_cols = [col for col in surg_date_cols if col in self.df.columns]
 
+            if existing_surg_cols:
+                # Merge into one column using first non-null value
+                self.df['Surgery_date'] = self.df[existing_surg_cols].bfill(axis=1).iloc[:, 0]
+                self.df['Surgery_date'] = pd.to_datetime(self.df['Surgery_date'], errors='coerce')
+
+
+
+        if 'adm_injury_time' in self.df.columns and 'Injury_date' in self.df.columns:
+            self.df['Injury_date'] = pd.to_datetime(self.df['Injury_date'].astype(str) + ' ' + self.df['adm_injury_time'].astype(str),
+            errors='coerce')
+
+        if 'time_injury' in self.df.columns and 'Injury_date' in self.df.columns:
+            self.df['Injury_date'] = pd.to_datetime(self.df['Injury_date'].astype(str) + ' ' + self.df['time_injury'].astype(str),
+            errors='coerce')
+
+        if 'intraop_time_surg' in self.df.columns and 'Surgery_date' in self.df.columns:
+            self.df['Surgery_date'] = pd.to_datetime(self.df['Surgery_date'].astype(str) + ' ' + self.df['intraop_time_surg'].astype(str),
+            errors='coerce')
 
     # ----------------------------------------------------------
-    # STEP 12: Build records
+    # STEP 13: Process times to blood draw
+    # ----------------------------------------------------------
+    def _times_to_analyses(self):
+        if 'Draw_date' in self.df.columns:
+            # Parse Draw_date safely
+            parsed_draw = pd.to_datetime(self.df['Draw_date'], errors='coerce')
+
+            # Identify if Draw_date has a time (non-midnight)
+            has_time = parsed_draw.dt.time.astype(str) != "00:00:00"
+
+            # Ensure time columns exist
+            if 'teg_time' not in self.df.columns:
+                self.df['teg_time'] = pd.NA
+            teg_exists = True
+
+            # If lab_time missing entirely, mark flag
+            lab_time_exists = 'lab_time' in self.df.columns
+            if not lab_time_exists:
+                self.df['lab_time'] = pd.NA  # create column if missing
+
+            # Replace missing times with midnight
+            self.df['teg_time'] = self.df['teg_time'].fillna('00:00').astype(str)
+
+            if lab_time_exists:
+                self.df['lab_time'] = self.df['lab_time'].astype(str)
+                # Replace only rows where teg_time is '00:00'
+                self.df.loc[self.df['teg_time'] == '00:00', 'teg_time'] = self.df['lab_time']
+            else:
+                self.df['lab_time'] = self.df['teg_time'].fillna('00:00').astype(str)
+
+            # Define fallback date (lab_date_visit if Draw_date missing)
+            if 'lab_date_visit' in self.df.columns:
+                fallback_dates = pd.to_datetime(self.df['lab_date_visit'], errors='coerce')
+            else:
+                fallback_dates = pd.Series([pd.NaT] * len(self.df), index=self.df.index)
+
+            # Build Draw_date_teg
+            self.df['Draw_date_teg'] = np.where(
+                has_time,
+                parsed_draw.astype(str),
+                (
+                    fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d')
+                    + ' '
+                    + self.df['teg_time']
+                )
+            )
+
+            # Build Draw_date_lab
+            if lab_time_exists:
+                # If lab_time exists, only use it; leave NaT if missing
+                self.df['Draw_date_lab'] = np.where(
+                    has_time,
+                    parsed_draw.astype(str),
+                    np.where(
+                        self.df['lab_time'].notna() & (self.df['lab_time'] != 'NaT'),
+                        fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d') + ' ' + self.df['lab_time'],
+                        np.nan  # leave missing as NaT
+                    )
+                )
+            else:
+                # If lab_time column missing entirely → fallback to teg_time
+                self.df['Draw_date_lab'] = np.where(
+                    has_time,
+                    parsed_draw.astype(str),
+                    (
+                        fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d')
+                        + ' '
+                        + self.df['teg_time']
+                    )
+                )
+
+            # Hemoglobin consistency rules
+
+            # Ensure Draw_date_lab and Draw_date_teg are proper datetimes
+            self.df['Draw_date_lab'] = pd.to_datetime(self.df['Draw_date_lab'], errors='coerce')
+            self.df['Draw_date_teg'] = pd.to_datetime(self.df['Draw_date_teg'], errors='coerce')
+
+            # If Hemoglobin is missing → Draw_date_lab should be missing too
+            self.df.loc[self.df['Hemoglobin'].isna(), 'Draw_date_lab'] = pd.NaT
+
+            # If Hemoglobin is present but Draw_date_lab is missing → copy from Draw_date_teg
+            self.df.loc[
+                (~self.df['Hemoglobin'].isna()) & (self.df['Draw_date_lab'].isna()),
+                'Draw_date_lab'
+            ] = self.df.loc[
+                (~self.df['Hemoglobin'].isna()) & (self.df['Draw_date_lab'].isna()),
+                'Draw_date_teg']
+
+       
+    # ----------------------------------------------------------
+    # STEP 14: Process AO_OTA
+    # ----------------------------------------------------------
+    def _Process_AO_OTA(self):
+        if {'ota_type_61', 'ota_type_62'}.issubset(self.df.columns):
+            self.df['AO_OTA'] = (self.df[['ota_type_61', 'ota_type_62']].apply(lambda x: '/'.join(x.dropna().astype(str)), axis=1).replace('', np.nan))
+     
+    # ----------------------------------------------------------
+    # STEP 15: Process Medication
+    # ----------------------------------------------------------
+    def _Process_medication(self):
+        self.df['Pre_op_med'] = self.df['StudyID'].map(self.medications_preop)
+        self.df['Pre_op_med'] = self.df['Pre_op_med'].replace({np.nan: 'LMWH'})
+      
+    # ----------------------------------------------------------
+    # STEP 16: Process Death/Withdrawals
+    # ----------------------------------------------------------
+    def _Process_Death_Withdrawals(self):
+        # ---- Withdrawn/Death from main Withdrawn column ----
+        if 'Withdrawn' in self.df.columns:
+            withdrew_values = {'patient withdrew consent', 'other reason', 'lost to follow up'}
+
+            # Initialize Death column
+            self.df['Death'] = 'No'
+
+            # Normalize Withdrawn column
+            self.df['Withdrawn_norm'] = self.df['Withdrawn'].astype(str).str.strip().str.lower()
+
+            # Death rows
+            death_mask = self.df['Withdrawn_norm'] == 'death'
+            self.df.loc[death_mask, ['Death', 'Withdrawn']] = ['Yes', 'No']
+
+            # Withdrawn rows
+            withdrew_mask = self.df['Withdrawn_norm'].isin(withdrew_values) & ~death_mask
+            self.df.loc[withdrew_mask, 'Withdrawn'] = 'Yes'
+
+            # All other rows
+            self.df.loc[~death_mask & ~withdrew_mask, 'Withdrawn'] = 'No'
+
+            self.df.drop(columns=['Withdrawn_norm'], inplace=True)
+        else:
+            self.df['Withdrawn'] = 'No'
+            self.df['Death'] = 'No'
+
+        # ---- Override Death if outcomes_outcome_type indicates mortality ----
+        if 'comp_death' in self.df.columns:
+
+            comp_death_series = self.df['comp_death']
+            if isinstance(comp_death_series, pd.DataFrame):
+                # Take the first column if somehow multiple columns
+                comp_death_series = comp_death_series.iloc[:, 0]
+
+            # Normalize text
+            comp_death_series = comp_death_series.astype(str).str.strip().str.lower()
+
+            # Mark mortality if 'checked' or 'yes'
+            mortality_ids = self.df.loc[comp_death_series.isin(['checked', 'yes']), 'StudyID'].unique()
+            self.df.loc[self.df['StudyID'].isin(mortality_ids), 'Death'] = 'Yes'
+            self.df.loc[self.df['StudyID'].isin(mortality_ids), 'Withdrawn'] = 'No'
+
+        # ---- Ensure Withdrawn/Death consistent per StudyID ----
+        for study_id, group in self.df.groupby('StudyID'):
+            if (group['Death'] == 'Yes').any():
+                self.df.loc[self.df['StudyID'] == study_id, ['Death', 'Withdrawn']] = ['Yes', 'No']
+            elif (group['Withdrawn'] == 'Yes').any():
+                self.df.loc[self.df['StudyID'] == study_id, 'Withdrawn'] = 'Yes'
+
+    # ----------------------------------------------------------
+    # STEP 17: Process Treatment
+    # ----------------------------------------------------------
+    def _process_treatment(self):
+        treatment_map = {
+            # Hip
+            'intra_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
+            'intra_treatment___2': 'Total Hip Arthroplasty',
+            'intra_treatment___3': 'Cannulated Screws',
+            'intra_treatment___4': 'Short cephalomedullary nail',
+            'intra_treatment___5': 'Long cephalomedullary nail',
+            'intra_treatment___6': 'Dynamic Hip Screw',
+            'intra_treatment___7': 'Other',
+
+            # Pathway
+            'intraop_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
+            'intraop_treatment___2': 'Total Hip Arthroplasty',
+            'intraop_treatment___3': 'Cannulated Screws',
+            'intraop_treatment___4': 'Short cephalomedullary nail',
+            'intraop_treatment___5': 'Long cephalomedullary nail',
+            'intraop_treatment___6': 'Dynamic Hip Screw',
+            'intraop_treatment___7': 'Other'
+        }
+
+        def process(prefix):
+            # find columns starting with the prefix
+            cols = [c for c in self.df.columns if c.startswith(prefix)]
+            if not cols:
+                return pd.Series([np.nan] * len(self.df), index=self.df.index)
+
+            def mapper(row):
+                checked = [
+                    treatment_map[col]
+                    for col in cols
+                    if str(row.get(col, "")).strip().lower() in ("checked", "1", "true")
+                ]
+                return "/".join(checked) if checked else np.nan
+
+            return self.df.apply(mapper, axis=1)
+
+        # Process hip & pathway treatments separately
+        self.df['intra_treatment'] = process('intra_treatment')
+        self.df['intraop_treatment'] = process('intraop_treatment')
+
+        # Preferred: hip → pathway
+        self.df['Treatment'] = self.df['intra_treatment'].combine_first(
+            self.df['intraop_treatment']
+        )
+
+        # Final classification via arth_fix map (if you have it)
+        if hasattr(self, 'arth_fix'):
+            self.df['Treatment'] = self.df['Treatment'].map(self.arth_fix).fillna(
+                self.df['Treatment']
+            )
+
+    # ----------------------------------------------------------
+    # STEP 18: Blood Transfusion
+    # ----------------------------------------------------------
+
+    def _add_blood_transfusion(self):
+        self.df['blood_rbc'] = pd.to_numeric(self.df['blood_rbc'], errors='coerce').fillna(0)
+        total_blood_transfusions = self.df.groupby('StudyID')['blood_rbc'].sum().to_dict()
+        
+        self.df['total_blood_rbc'] = self.df['StudyID'].map(total_blood_transfusions)
+        self.df['blood_rbc_yn'] = np.where(self.df['total_blood_rbc']==0, 'No','Yes')
+
+    # ----------------------------------------------------------
+    # STEP 19: Study Names
+    # ----------------------------------------------------------
+    def _add_study_names(self):
+        self.df['Study'] = self.df['StudyID'].str.extract(r'^(TH|HPA|TF|TPA)').replace({
+                'TH': 'Hip',
+                'HPA': 'Pathway',
+                'TF': 'Femur',
+                'TPA': 'Pelvis'
+            })
+
+    # ----------------------------------------------------------
+    # STEP 20: CAS-score
+    # ----------------------------------------------------------
+    def _compute_cas(self):
+        if 'CAS' not in self.df.columns:
+            self.df['CAS'] = np.nan
+
+        if 'cas_timepoint' in self.df.columns:
+                    timepoint_dict_lower = {k.lower(): v for v_list in self.timepoint_dict.values() for k in v_list for v in [list(self.timepoint_dict.keys())[list(self.timepoint_dict.values()).index(v_list)]]}
+                    self.df['cas_timepoint'] = self.df['cas_timepoint'].astype(str).str.lower().map(timepoint_dict_lower)
+                    # self.df['cas_timepoint']=self.df['cas_timepoint'].apply(self._map_timepoint)
+                    self.df['CAS'] = pd.to_numeric(self.df['CAS'], errors='coerce')
+                    df_cas = self.df.dropna(subset=['CAS'])[['StudyID','cas_timepoint','CAS']].rename(columns={'cas_timepoint':'Time'})
+                
+
+                    self.df = self.df.drop(columns=['CAS','cas_timepoint']).merge(df_cas, on=['StudyID', 'Time'], how='left')
+
+    # ----------------------------------------------------------
+    # Build records
     # ----------------------------------------------------------
     def _build_records(self):
         """
@@ -464,18 +767,16 @@ class RedcapProcessor:
 
         for study_id, rows in self.df.groupby("StudyID"):
 
-            # ------------------------------
-            # 1. EXTRACT DEMOGRAPHICS
-            # ------------------------------
+            # EXTRACT DEMOGRAPHICS
+
             demo = {}
             for col in self.demographic_cols:
                 if col in rows.columns:
                     values = rows[col].dropna()
                     demo[col] = values.iloc[0] if len(values) > 0 else None
 
-            # ------------------------------
-            # 2. BUILD BLOOD DRAW OBJECTS
-            # ------------------------------
+            # BUILD BLOOD DRAW OBJECTS
+
             blood_draws = []
 
             for _, row in rows.iterrows():
@@ -493,24 +794,25 @@ class RedcapProcessor:
 
                 blood_draws.append(BloodDraw(draw_id=draw_id, **labs))
 
-            # ------------------------------
-            # 3. CREATE RECORD OBJECT
-            # ------------------------------
+            # CREATE RECORD OBJECT
+
             record = Record(
                 record_id=study_id,
                 demographics=demo,
-                blood_draws=blood_draws
+                blood_draws=blood_draws,
             )
 
             # compute time differences inside the record
             record.add_time_differences()
+            
 
             self.records[study_id] = record
 
-        print("Step12: Records Successfully Built!")
+        print("Records Successfully Built!")
+        print(f"********* This study has {self.df['StudyID'].nunique()} patients ************")
 
 
-##########################
+##################################################################################################################################
     def get_all_demographics(self):
         rows = []
         for sid, rec in self.records.items():
@@ -520,9 +822,6 @@ class RedcapProcessor:
         return pd.DataFrame(rows)
 
 
-    # ---------------------------------------------------
-    # ⭐ ALL LABS-ONLY (all records) as one DataFrame
-    # ---------------------------------------------------
     def get_all_labs(self):
         dfs = [rec.to_lab_dataframe() for rec in self.records.values()]
         dfs = [df for df in dfs if not df.empty]
@@ -531,9 +830,6 @@ class RedcapProcessor:
         return pd.concat(dfs, ignore_index=True)
 
 
-    # ---------------------------------------------------
-    # ⭐ FULL MERGED DF (labs + demographics)
-    # ---------------------------------------------------
     def get_full_dataframe(self):
         dfs = [rec.to_dataframe() for rec in self.records.values()]
         dfs = [df for df in dfs if not df.empty]
@@ -548,550 +844,19 @@ class RedcapProcessor:
 #     # --------------------------------------------------------------------------------------------------OLD CODE WORKED
    
 
-       
-
-#         if 'Draw_date' in df.columns:
-#             # --- Step 1: Parse Draw_date safely ---
-#             parsed_draw = pd.to_datetime(df['Draw_date'], errors='coerce')
-
-#             # --- Step 2: Identify if Draw_date has a time (non-midnight) ---
-#             has_time = parsed_draw.dt.time.astype(str) != "00:00:00"
-
-#             # --- Step 3: Ensure time columns exist ---
-#             if 'teg_time' not in df.columns:
-#                 df['teg_time'] = pd.NA
-#             teg_exists = True
-
-#             # If lab_time missing entirely, mark flag
-#             lab_time_exists = 'lab_time' in df.columns
-#             if not lab_time_exists:
-#                 df['lab_time'] = pd.NA  # create column if missing
-
-#             # --- Step 4: Replace missing times with midnight ---
-#             df['teg_time'] = df['teg_time'].fillna('00:00').astype(str)
-
-#             if lab_time_exists:
-#                 df['lab_time'] = df['lab_time'].astype(str)
-#                 # Replace only rows where teg_time is '00:00'
-#                 df.loc[df['teg_time'] == '00:00', 'teg_time'] = df['lab_time']
-#             else:
-#                 df['lab_time'] = df['teg_time'].fillna('00:00').astype(str)
+#        
 
 
-#             # --- Step 5: Define fallback date (lab_date_visit if Draw_date missing) ---
-#             if 'lab_date_visit' in df.columns:
-#                 fallback_dates = pd.to_datetime(df['lab_date_visit'], errors='coerce')
-#             else:
-#                 fallback_dates = pd.Series([pd.NaT] * len(df), index=df.index)
+# 
+#         
 
-#             # --- Step 6: Build Draw_date_teg ---
-#             df['Draw_date_teg'] = np.where(
-#                 has_time,
-#                 parsed_draw.astype(str),
-#                 (
-#                     fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d')
-#                     + ' '
-#                     + df['teg_time']
-#                 )
-#             )
-
-#             # --- Step 7: Build Draw_date_lab ---
-#             if lab_time_exists:
-#                 # If lab_time exists, only use it; leave NaT if missing
-#                 df['Draw_date_lab'] = np.where(
-#                     has_time,
-#                     parsed_draw.astype(str),
-#                     np.where(
-#                         df['lab_time'].notna() & (df['lab_time'] != 'NaT'),
-#                         fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d') + ' ' + df['lab_time'],
-#                         np.nan  # leave missing as NaT
-#                     )
-#                 )
-#             else:
-#                 # If lab_time column missing entirely → fallback to teg_time
-#                 df['Draw_date_lab'] = np.where(
-#                     has_time,
-#                     parsed_draw.astype(str),
-#                     (
-#                         fallback_dates.combine_first(parsed_draw).dt.strftime('%Y-%m-%d')
-#                         + ' '
-#                         + df['teg_time']
-#                     )
-#                 )
-#             # --- Step 8: Hemoglobin consistency rules ---
-
-#             # Ensure Draw_date_lab and Draw_date_teg are proper datetimes
-#             df['Draw_date_lab'] = pd.to_datetime(df['Draw_date_lab'], errors='coerce')
-#             df['Draw_date_teg'] = pd.to_datetime(df['Draw_date_teg'], errors='coerce')
-
-#             # If Hemoglobin is missing → Draw_date_lab should be missing too
-#             df.loc[df['Hemoglobin'].isna(), 'Draw_date_lab'] = pd.NaT
-
-#             # If Hemoglobin is present but Draw_date_lab is missing → copy from Draw_date_teg
-#             df.loc[
-#                 (~df['Hemoglobin'].isna()) & (df['Draw_date_lab'].isna()),
-#                 'Draw_date_lab'
-#             ] = df.loc[
-#                 (~df['Hemoglobin'].isna()) & (df['Draw_date_lab'].isna()),
-#                 'Draw_date_teg']
-
-
-#         if 'adm_injury_time' in df.columns and 'Injury_date' in df.columns:
-#             df['Injury_date'] = pd.to_datetime(df['Injury_date'].astype(str) + ' ' + df['adm_injury_time'].astype(str),
-#             errors='coerce')
-
-#         if 'time_injury' in df.columns and 'Injury_date' in df.columns:
-#             df['Injury_date'] = pd.to_datetime(df['Injury_date'].astype(str) + ' ' + df['time_injury'].astype(str),
-#             errors='coerce')
-
-#         if 'intraop_time_surg' in df.columns and 'Surgery_date' in df.columns:
-#             df['Surgery_date'] = pd.to_datetime(df['Surgery_date'].astype(str) + ' ' + df['intraop_time_surg'].astype(str),
-#             errors='coerce')
-
-#         if {'ota_type_61', 'ota_type_62'}.issubset(df.columns):
-#             df['AO_OTA'] = (df[['ota_type_61', 'ota_type_62']].apply(lambda x: '/'.join(x.dropna().astype(str)), axis=1).replace('', np.nan))
-
-#         if 'complication_dvt' in df.columns:
-#             df['DVT'] = np.where(df['complication_dvt']=='Yes','DVT','No')
-
-
-#         if 'complication_pe' in df.columns:
-#             df['PE'] = np.where(df['complication_pe']=='Yes','PE','No')
-
-
-#         # Merge multiple timepoint columns into a single 'Time' column
-#         timepoint_cols = ['teg_preop_tp', 'teg_postop_tp1','teg_postop_tp2', 'teg_fu_tp','teg_timepoint']
-#         existing_timepoint_cols = [col for col in timepoint_cols if col in df.columns]
-
-#         if existing_timepoint_cols:
-#             # Take the first non-null value across the columns
-#             df['Time'] = df[existing_timepoint_cols].bfill(axis=1).iloc[:, 0]
-
-
-#         # --- Merge surgery date columns into a single 'Surgery_date' column ---
-#         surg_date_cols = ['surg_date_pelvis', 'surg_date_ant_acet', 'surg_date_post_acet']
-#         existing_surg_cols = [col for col in surg_date_cols if col in df.columns]
-
-#         if existing_surg_cols:
-#             # Merge into one column using first non-null value
-#             df['Surgery_date'] = df[existing_surg_cols].bfill(axis=1).iloc[:, 0]
-
-#             # Optional: ensure datetime type
-#             df['Surgery_date'] = pd.to_datetime(df['Surgery_date'], errors='coerce')
-
-#             # Fill the same Surgery_date across all rows for each StudyID
-#             df['Surgery_date'] = df.groupby('StudyID')['Surgery_date'].transform(lambda x: x.ffill().bfill())
-           
-
-
-#         # ---- Withdrawn/Death from main Withdrawn column ----
-#         if 'Withdrawn' in df.columns:
-#             withdrew_values = {'patient withdrew consent', 'other reason', 'lost to follow up'}
-
-#             # Initialize Death column
-#             df['Death'] = 'No'
-
-#             # Normalize Withdrawn column
-#             df['Withdrawn_norm'] = df['Withdrawn'].astype(str).str.strip().str.lower()
-
-#             # Death rows
-#             death_mask = df['Withdrawn_norm'] == 'death'
-#             df.loc[death_mask, ['Death', 'Withdrawn']] = ['Yes', 'No']
-
-#             # Withdrawn rows
-#             withdrew_mask = df['Withdrawn_norm'].isin(withdrew_values) & ~death_mask
-#             df.loc[withdrew_mask, 'Withdrawn'] = 'Yes'
-
-#             # All other rows
-#             df.loc[~death_mask & ~withdrew_mask, 'Withdrawn'] = 'No'
-
-#             df.drop(columns=['Withdrawn_norm'], inplace=True)
-#         else:
-#             df['Withdrawn'] = 'No'
-#             df['Death'] = 'No'
-
-#         # ---- Override Death if outcomes_outcome_type indicates mortality ----
-#         if 'comp_death' in df.columns:
-    
-            
-#             comp_death_series = df['comp_death']
-#             if isinstance(comp_death_series, pd.DataFrame):
-#                 # Take the first column if somehow multiple columns
-#                 comp_death_series = comp_death_series.iloc[:, 0]
-
-#             # Normalize text
-#             comp_death_series = comp_death_series.astype(str).str.strip().str.lower()
-
-#             # Mark mortality if 'checked' or 'no'
-#             mortality_ids = df.loc[comp_death_series.isin(['checked', 'yes']), 'StudyID'].unique()
-#             df.loc[df['StudyID'].isin(mortality_ids), 'Death'] = 'Yes'
-#             df.loc[df['StudyID'].isin(mortality_ids), 'Withdrawn'] = 'No'
-
-#         # ---- Ensure Withdrawn/Death consistent per StudyID ----
-#         for study_id, group in df.groupby('StudyID'):
-#             if (group['Death'] == 'Yes').any():
-#                 df.loc[df['StudyID'] == study_id, ['Death', 'Withdrawn']] = ['Yes', 'No']
-#             elif (group['Withdrawn'] == 'Yes').any():
-#                 df.loc[df['StudyID'] == study_id, 'Withdrawn'] = 'Yes'
-
+#     
         
-#         treatment_map = {
-#             #Hip
-#             'intra_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
-#             'intra_treatment___2': 'Total Hip Arthroplasty',
-#             'intra_treatment___3': 'Cannulated Screws',
-#             'intra_treatment___4': 'Short cephalomedullary nail',
-#             'intra_treatment___5': 'Long cephalomedullary nail',
-#             'intra_treatment___6': 'Dynamic Hip Screw',
-#             'intra_treatment___7': 'Other',
-
-#             #Pathway
-#             'intraop_treatment___1': 'Hemi-arthroplasty (monopolar, bipolar)',
-#             'intraop_treatment___2': 'Total Hip Arthroplasty',
-#             'intraop_treatment___3': 'Cannulated Screws',
-#             'intraop_treatment___4': 'Short cephalomedullary nail',
-#             'intraop_treatment___5': 'Long cephalomedullary nail',
-#             'intraop_treatment___6': 'Dynamic Hip Screw',
-#             'intraop_treatment___7': 'Other'
-#         }
-#         def map_treatments(df, prefix):
-#             cols = [c for c in df.columns if c.startswith(prefix)]
-#             if not cols:
-#                 return pd.Series([np.nan] * len(df))
-#             def mapper(row):
-#                 checked = [treatment_map[col] for col in cols if row.get(col) == 'Checked']
-#                 return '/'.join(checked) if checked else np.nan
-#             return df.apply(mapper, axis=1)
-
-#         df['intra_treatment'] = map_treatments(df, 'intra_treatment___')
-#         df['intraop_treatment'] = map_treatments(df, 'intraop_treatment___')
-
-#         # Fill both within each StudyID
-#         df['intra_treatment'] = df.groupby('StudyID')['intra_treatment'].ffill().bfill()
-#         df['intraop_treatment'] = df.groupby('StudyID')['intraop_treatment'].ffill().bfill()
-
-#         # Prefer intra_treatment, but fallback to intraop_treatment
-#         df['Treatment'] = df['intra_treatment'].combine_first(df['intraop_treatment'])
-#         df['Treatment'] = df['Treatment'].map(self.arth_fix)
-
-
-#         # Medications
-#         df['Pre_op_med'] = df['StudyID'].map(self.medications_preop)
-#         df['Pre_op_med'] = df['Pre_op_med'].replace({np.nan: 'LMWH'})
-
-
-
-#          # Step 5: Standardize timepoints
-#         if 'Time' in df.columns:
-#             df['Time'] = df['Time'].apply(self._map_timepoint)
-
-    
-
-#         # Step 6: Ensure all dempgraphic columns exist
-#         for col in self.dempgraphic_cols:
-#             if col not in df.columns:
-#                 df[col] = np.nan
-        
-
-
-
-
-#         # ---- Comorbidity and complications
-        
-#         if 'bl_tobacco' in df.columns:
-#             df['comorbidty_current_smoker']=np.where(df['bl_tobacco']==1, 'Yes','No')
-        
-#         df['comorbidty_current_smoker'] = df.groupby('StudyID')['comorbidty_current_smoker'].ffill().bfill()
-        
-
-#         df['StudyID'] = df['StudyID'].astype(str).str.strip().str.upper()
-#         df = df.sort_values('StudyID').reset_index(drop=True)
-
-#         COMORBIDITY_COMPLICATIONS = [
-#             'comorbidty_diabetes','comorbidty_cancer','comorbidty_cardiovascular',
-#             'comorbidty_pulmonary','comorbidty_stroke',
-#             'complication_pulmonary','complication_cardiovascular','complication_infection'
-#         ]
-
-#         # Replace map
-#         replace_map = {
-#             'Checked': 'Yes',
-#             'Unchecked': 'No',
-#             'Yes*': 'Yes',
-#             'Other': np.nan,
-#             'Yes': 'Yes',
-#             'No': 'No',
-#             None: 'No'
-#         }
-
-#         for col in COMORBIDITY_COMPLICATIONS:
-#             if col in df.columns:
-               
-#                df.loc[:, col] = df.loc[:, col].astype(str).replace('nan', np.nan)  # convert to string, handle NaN
-#                df.loc[:, col] = df.loc[:, col].str.strip()            # string operations
-#                df.loc[:, col] = df.loc[:, col].replace(replace_map)              
-#             else:
-#                 df.loc[:, col] = np.nan
-
-
-
-#         # Count 'Yes' per StudyID and set all accordingly
-#         for col in COMORBIDITY_COMPLICATIONS:
-#             df[col] = df.groupby('StudyID')[col].transform(lambda x: 'Yes' if (x == 'Yes').sum() >= 1 else 'No')
-
-#         for col in COMORBIDITY_COMPLICATIONS:            
-#             df[col]=df[col].replace(np.nan,'No')
-
-    
-#         df = df.sort_values('StudyID').reset_index(drop=True)
-
-#         ######
-#         df['Age'] = df.groupby('StudyID')['Age'].transform(lambda x: x.ffill().bfill()) 
-#         df['Sex'] = df.groupby('StudyID')['Sex'].transform(lambda x: x.ffill().bfill()) 
-#         df['BMI'] = df.groupby('StudyID')['BMI'].transform(lambda x: x.ffill().bfill()) 
-#         df['Injury_date'] = df.groupby('StudyID')['Injury_date'].transform(lambda x: x.ffill().bfill()) 
-#         df['Admission_date'] = df.groupby('StudyID')['Admission_date'].transform(lambda x: x.ffill().bfill()) 
-#         df['Surgery_date'] = df.groupby('StudyID')['Surgery_date'].transform(lambda x: x.ffill().bfill()) 
-#         df['AO_OTA'] = df.groupby('StudyID')['AO_OTA'].transform(lambda x: x.ffill().bfill()) 
-
-
-#     # ---- Time calculations ----
-#         df['Injury_date'] = pd.to_datetime(df['Injury_date'], errors="coerce")
-#         df['Surgery_date'] = pd.to_datetime(df['Surgery_date'], errors="coerce")
-
-#         df['time_injury_to_surgery_hours'] = (
-#             (df['Surgery_date'] - df['Injury_date']).dt.total_seconds() / 3600
-#         )
-
-#     # ---- Blood Transfusions ----
-#         df['blood_rbc'] = pd.to_numeric(df['blood_rbc'], errors='coerce').fillna(0)
-#         total_blood_transfusions = df.groupby('StudyID')['blood_rbc'].sum().to_dict()
-        
-#         df['total_blood_rbc'] = df['StudyID'].map(total_blood_transfusions)
-#         df['blood_rbc_yn'] = np.where(df['total_blood_rbc']==0, 'No','Yes')
-        
-#     # Create a study column with study names
-#         df['Study'] = df['StudyID'].str.extract(r'^(TH|HPA|TF|TPA)').replace({
-#                 'TH': 'Hip',
-#                 'HPA': 'Pathway',
-#                 'TF': 'Femur',
-#                 'TPA': 'Pelvis'
-#             })
-#         if 'CAS' not in df.columns:
-#             df['CAS'] = np.nan
-
-#         if 'cas_timepoint' in df.columns:
-#                     df['cas_timepoint']=df['cas_timepoint'].apply(self._map_timepoint)
-#                     # Ensure CAS is numeric
-#                     df['CAS'] = pd.to_numeric(df['CAS'], errors='coerce')
-
-#                     df_cas = df.dropna(subset=['CAS'])[['StudyID','cas_timepoint','CAS']].rename(columns={'cas_timepoint':'Time'})
-                    
-
-#                     df = df.drop(columns=['CAS','cas_timepoint']).merge(df_cas, on=['StudyID', 'Time'], how='left')
+#  
+#         
 
 
         
-
-
-#         # Step 7: Save the processed DataFrame
-#         print('=================================================================================')
-#         print('Total Number of Patients Included:',df['StudyID'].nunique())
-
-#         # Step 8: Build Record objects
-#         self._build_records()
-
-
-#         self.df = df
-
-#         return self.df
-
-
-  
-
-#     # # -----------------------
-#     # # Map timepoints
-#     # # -----------------------
-#     # def _map_timepoint(self, tp):
-#     #     if pd.isna(tp):
-#     #         return tp
-#     #     for standard, variants in self.timepoint_dict.items():
-#     #         if tp in variants:
-#     #             return standard
-#     #     return tp
-    
-#     # -----------------------
-#     # Build records
-#     # # -----------------------
-#     # def _build_records(self):
-#     #     self.records = {}
-#     #     for study_id, rows in self.df.groupby("StudyID"):
-
-#     #         # Demographics
-#     #         demo = rows[self.dempgraphic_cols].apply(
-#     #             lambda col: col.dropna().iloc[0] if col.dropna().any() else None
-#     #         )
-#     #         demo_dict = demo.to_dict()
-
-#     #         blood_draws = []
-
-#     #         lab_cols_available = [c for c in self.lab_cols if c in rows.columns]
-#     #         # for _, row in rows.iterrows():
-#     #         #     if pd.notnull(row.get("Draw_date")):
-#     #         #         bd_data = row[self.lab_cols].to_dict()
-#     #         for _, row in rows.iterrows():
-#     #             if pd.notnull(row.get("Draw_date")):
-#     #                 bd_data = row[lab_cols_available].to_dict()
-#     #                 bd_data["Draw_date"] = row["Draw_date"]
-#     #                 blood_draws.append(BloodDraw(row["Draw_date"], **bd_data))
-
-
-#     #         # Save Record
-#     #         # self.records[study_id] = Record(study_id, demographics=demo_dict, blood_draws=blood_draws)
-#     #         rec = Record(study_id,demographics=demo_dict, blood_draws=blood_draws) #######
-#     #         rec.add_time_differences()  # <-- calculate once per patient
-#     #         self.records[study_id] = rec
-            
-
-#     # ------------------------------------------------------------------------------
-#     # Get demographics for a patient
-#     # ------------------------------------------------------------------------------
-#     def get_patient_demographics(self, study_id):
-#         """Display just the demographics for a single patient with StudyID as header, return None."""
-#         df_demo = self.get_all_demographics()
-#         patient_demo = df_demo[df_demo['StudyID'] == study_id].copy()
-
-#         if not patient_demo.empty:
-#             # Take first row and transpose
-#             patient_row = patient_demo.iloc[[0]].transpose()
-
-#             # Set the StudyID as the column header
-#             patient_row.columns = [study_id]
-
-#             # Drop the StudyID row to avoid repetition
-#             patient_row = patient_row.drop('StudyID')
-
-#             display(patient_row)
-        
-#         return None
-
-    
-#     # ------------------------------------------------------------------------------
-#     # Get all demographics for all patients
-#     # ------------------------------------------------------------------------------
-#     def get_all_demographics(self):
-#         if self.df is None:
-#             raise ValueError("Data not processed. Run fetch_and_process() first.")
-
-#         # Keep only demographic columns that exist in the df
-#         cols = [c for c in self.dempgraphic_cols if c in self.df.columns]
-
-#         df_demo = self.df[cols].copy()
-
-#         # Remove duplicates per StudyID
-#         df_demo = df_demo.drop_duplicates(subset='StudyID', keep='first')
-
-#         return df_demo
-    
-#     # ------------------------------------------------------------------------------
-#     # Get patient blood draws
-#     # ------------------------------------------------------------------------------
-#     def get_patient_blood_draws(self, study_id):
-#         """Display just the blooddraws for a single patient with StudyID as header, return None."""
-#         df_blood_draws = self.get_all_blood_draws()
-#         patient_blood_draws = df_blood_draws[df_blood_draws['StudyID'] == study_id].copy()
-#         display(patient_blood_draws)
-        
-#         return None
-
-    
-#     # ------------------------------------------------------------------------------
-#     # Get all blood draws for all patients
-#     # ------------------------------------------------------------------------------
-#     def get_all_blood_draws(self):
-#         all_draws = []
-
-#         for rec in self.records.values():
-
-#             # --- Patient-level info ---
-#             demo = rec.get_demographics()
-#             injury_date  = pd.to_datetime(demo.get('Injury_date',  pd.NA), errors='coerce')
-#             surgery_date = pd.to_datetime(demo.get('Surgery_date', pd.NA), errors='coerce')
-
-#             dvt_flag = demo.get('DVT', 'No')
-#             pe_flag  = demo.get('PE',  'No')
-
-#             # Loop through blood draws for this record
-#             for bd in rec.blood_draws:
-
-#                 row = {"StudyID": rec.study_id}
-#                 row.update(bd.labs)
-
-#                 # Ensure keys exist
-#                 row['Draw_date_lab'] = row.get('Draw_date_lab', pd.NA)
-#                 row['Draw_date_teg'] = row.get('Draw_date_teg', pd.NA)
-
-#                 # Convert dates
-#                 draw_lab = pd.to_datetime(row['Draw_date_lab'], errors='coerce')
-#                 draw_teg = pd.to_datetime(row['Draw_date_teg'], errors='coerce')
-
-#                 # --- Time deltas ---
-#                 row['injury_to_lab_hrs'] = (
-#                     (draw_lab - injury_date).total_seconds() / 3600
-#                     if pd.notnull(draw_lab) and pd.notnull(injury_date)
-#                     else pd.NA
-#                 )
-
-#                 row['injury_to_teg_hrs'] = (
-#                     (draw_teg - injury_date).total_seconds() / 3600
-#                     if pd.notnull(draw_teg) and pd.notnull(injury_date)
-#                     else pd.NA
-#                 )
-
-#                 row['surgery_to_lab_hrs'] = (
-#                     (draw_lab - surgery_date).total_seconds() / 3600
-#                     if pd.notnull(draw_lab) and pd.notnull(surgery_date)
-#                     else pd.NA
-#                 )
-
-#                 row['surgery_to_teg_hrs'] = (
-#                     (draw_teg - surgery_date).total_seconds() / 3600
-#                     if pd.notnull(draw_teg) and pd.notnull(surgery_date)
-#                     else pd.NA
-#                 )
-
-#                 # Patient-level info
-#                 row["Pre_op_med"] = self.medications_preop.get(rec.study_id, 'No')
-#                 row["Injury_date"] = injury_date
-#                 row["Surgery_date"] = surgery_date
-#                 row["DVT"] = dvt_flag
-#                 row["PE"] = pe_flag
-
-#                 # Save row
-#                 all_draws.append(row)
-
-#         # Convert to DataFrame AFTER building all rows
-#         df_all = pd.DataFrame(all_draws)
-
-#         # --- Exclusions ---
-#         mask = (df_all['StudyID'].isin(['TPA-046', 'TPA-073'])) & (df_all['Time'] == 'Pre-Op')
-#         df_all = df_all[~mask].copy()
-
-#         # --- Study name mapping ---
-#         df_all['Study'] = (
-#             df_all['StudyID']
-#             .str.extract(r'^(TH|HPA|TF|TPA)')[0]
-#             .replace({
-#                 'TH': 'Hip',
-#                 'HPA': 'Pathway',
-#                 'TF': 'Femur',
-#                 'TPA': 'Pelvis'
-#             })
-#         )
-
-#         return df_all
-
-    
     
 # -----------------------
 # BloodDraw and Record classes
@@ -1112,15 +877,48 @@ class Record:
         self.demographics = demographics
         self.blood_draws = blood_draws
 
-    # Your existing methods:
     def add_time_differences(self):
-        pass
+        injury = self.demographics.get('Injury_date')
+        surgery = self.demographics.get('Surgery_date')
+
+        if injury is not None and surgery is not None:
+            injury_dt = pd.to_datetime(injury, errors='coerce')
+            surgery_dt = pd.to_datetime(surgery, errors='coerce')
+            if pd.notna(injury_dt) and pd.notna(surgery_dt):
+                self.demographics['time_injury_to_surgery_hours'] = (surgery_dt - injury_dt).total_seconds() / 3600
+            else:
+                self.demographics['time_injury_to_surgery_hours'] = None
+        else:
+            self.demographics['time_injury_to_surgery_hours'] = None
 
     def get_demographics(self):
         return self.demographics
 
     def get_all_labs(self):
         return self.blood_draws
+
+
+    # def add_treatment(self):
+  
+
+    #     checked = [
+    #         label for col, label in treatment_map.items()
+    #         if self.demographics.get(col) == 'Checked'
+    #     ]
+
+    #     treatment = "/".join(checked) if checked else None
+    #     self.demographics['Treatment_raw'] = treatment
+
+    #     # Apply arth_fix if provided
+    #     if self.arth_fix and treatment in self.arth_fix:
+    #         self.demographics['Treatment'] = self.arth_fix[treatment]
+    #     else:
+    #         self.demographics['Treatment'] = treatment
+
+
+
+
+
 
     # ---------------------------------------------------
     # ⭐ NEW: Return demographics as a DataFrame
