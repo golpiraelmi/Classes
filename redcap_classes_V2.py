@@ -6,6 +6,7 @@ from redcap import Project
 
 
 
+
 class RedcapProcessor:
     def __init__(self, api_url, api_key):
         # Store API connection info
@@ -154,7 +155,7 @@ class RedcapProcessor:
                     'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
                     'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
                     'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
-                    'HPA-051','HPA-052','HPA-053','TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
+                    'HPA-051','HPA-052','HPA-053','THB-HPA-007','TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
                     'TH-225', 'TH-227', 'TH-236', 'TH-240','TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
                     'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "DOAC"),
             **dict.fromkeys(['TH-244'], 'Warfarin'),
@@ -216,7 +217,7 @@ class RedcapProcessor:
                               'total_blood_rbc','blood_rbc_yn']
         
         
-        self.lab_cols = ['Study','StudyID', 'Time','CAS','cas_timepoint','VTE_type','VTE', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma',  'Draw_date_lab', 'Draw_date_teg','Pre_op_med','injury_to_lab_hrs']
+        self.lab_cols = ['Study','StudyID', 'Time','CAS','VTE_type','VTE', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma','Draw_date_lab', 'Draw_date_teg','Pre_op_med','time_injury_to_surgery_hours']
         
         # Placeholder for processed DataFrame
         self.df = None
@@ -247,17 +248,19 @@ class RedcapProcessor:
         self._compute_cas()
         self._build_records()
 
-        
-        # self._fill_missing_values()
 
         return self.df
 
     # ----------------------------------------------------------
     # STEP 1: Fetch records
     # ----------------------------------------------------------
+    
     def _fetch_records(self):
         records_data = self.project.export_records(raw_or_label='label')
         self.df = pd.DataFrame(records_data)
+        print('Data Fetched')
+
+    
 
     # ----------------------------------------------------------
     # STEP 2: Clean basic data
@@ -321,7 +324,8 @@ class RedcapProcessor:
             'TPA-035': 'Multiple Surgery Patient: both pelvic and femur surgery on October 19, and another pelvic surgery on October 26, 2021',
             'TPA-043': 'Two stage surgeries related to pelvis/acetabulum - 4th and 6th April 2022',
             'TPA-048': 'Two stage surgeries related to pelvis/acetabulum - 6th and 10th May 2022',
-            'TPA-079': 'Two stage surgeries related to pelvis/acetabulum - 6th and 12th Feb 2024'
+            'TPA-079': 'Two stage surgeries related to pelvis/acetabulum - 6th and 12th Feb 2024',
+            'TPA-104': 'Two stage surgeries related to pelvis/acetabulum - Recent'
         }
 
         to_remove = list(to_remove_reasons.keys())
@@ -504,6 +508,7 @@ class RedcapProcessor:
             self.df['Surgery_date'] = pd.to_datetime(self.df['Surgery_date'].astype(str) + ' ' + self.df['intraop_time_surg'].astype(str),
             errors='coerce')
 
+
     # ----------------------------------------------------------
     # STEP 13: Process times to blood draw
     # ----------------------------------------------------------
@@ -575,7 +580,7 @@ class RedcapProcessor:
                         + self.df['teg_time']
                     )
                 )
-
+            
             # Hemoglobin consistency rules
 
             # Ensure Draw_date_lab and Draw_date_teg are proper datetimes
@@ -592,7 +597,7 @@ class RedcapProcessor:
             ] = self.df.loc[
                 (~self.df['Hemoglobin'].isna()) & (self.df['Draw_date_lab'].isna()),
                 'Draw_date_teg']
-
+            
        
     # ----------------------------------------------------------
     # STEP 14: Process AO_OTA
@@ -755,6 +760,8 @@ class RedcapProcessor:
 
                     self.df = self.df.drop(columns=['CAS','cas_timepoint']).merge(df_cas, on=['StudyID', 'Time'], how='left')
 
+        
+
     # ----------------------------------------------------------
     # Build records
     # ----------------------------------------------------------
@@ -794,6 +801,7 @@ class RedcapProcessor:
 
                 blood_draws.append(BloodDraw(draw_id=draw_id, **labs))
 
+
             # CREATE RECORD OBJECT
 
             record = Record(
@@ -812,7 +820,8 @@ class RedcapProcessor:
         print(f"********* This study has {self.df['StudyID'].nunique()} patients ************")
 
 
-##################################################################################################################################
+    ##### HELPER METHODS #####
+    ### ALL PATIENTS
     def get_all_demographics(self):
         rows = []
         for sid, rec in self.records.items():
@@ -821,13 +830,112 @@ class RedcapProcessor:
             rows.append(row)
         return pd.DataFrame(rows)
 
+    
+
 
     def get_all_labs(self):
+
+        # Collect all dataframe rows
         dfs = [rec.to_lab_dataframe() for rec in self.records.values()]
         dfs = [df for df in dfs if not df.empty]
-        if len(dfs) == 0:
+        if not dfs:
             return pd.DataFrame()
-        return pd.concat(dfs, ignore_index=True)
+
+        out = pd.concat(dfs, ignore_index=True)
+
+        teg_cols = ['Time','R_time','K_time','Alpha_Angle','MA','LY30','ACT','ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma']
+        lab_cols = ['Time','Hemoglobin', 'Creatinine']
+
+       
+        if "Draw_ID" in out.columns:
+            out["draw_group"] = out["Draw_ID"].astype(str).str.split(r"[_/]").str[0]
+        else:
+            out["draw_group"] = np.nan
+        
+    
+        # Build TEG-only frame
+        teg_rows = out.dropna(subset=teg_cols, how="all").copy()
+        teg_rows = teg_rows[['StudyID','draw_group'] + teg_cols].drop_duplicates()
+
+        display(teg_rows[teg_rows['StudyID']=='HPA-004'][['draw_group','Time',
+            'R_time','K_time','Alpha_Angle','MA','LY30','ACT',
+            'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma',
+            
+        ]])
+
+        # Build LAB-only frame
+        lab_rows = out.dropna(subset=lab_cols, how="all").copy()
+        # lab_rows["Time"] = lab_rows["draw_group"]
+        lab_rows = lab_rows[['StudyID','draw_group'] + lab_cols].drop_duplicates()
+        lab_rows['Time'] = lab_rows['Time'].fillna(lab_rows['draw_group'])
+        display(lab_rows[lab_rows['StudyID']=='HPA-004'][['draw_group','Time','Hemoglobin', 'Creatinine']])
+
+        # Merge LAB + TEG
+        merged = pd.merge(teg_rows, lab_rows, on=["StudyID","draw_group",'Time'], how="outer")
+
+        merged = pd.merge(
+            teg_rows, 
+            lab_rows, 
+            on=["StudyID","draw_group",'Time'], 
+            how="outer", 
+            suffixes=('_teg','_lab')
+            )
+        
+        merged = merged.groupby(['StudyID','draw_group','Time'], as_index=False).agg(lambda x: x.dropna().iloc[0] if x.notna().sum() > 0 else np.nan)
+        
+        display(merged[merged['StudyID']=='HPA-004'])
+
+        # # -------------------------
+        # # 5. Attach metadata
+        # # -------------------------
+        # metadata_cols = ['Study','CAS','VTE_type','VTE','Pre_op_med']
+        # metadata = out[['StudyID','draw_group'] + metadata_cols].drop_duplicates()
+
+        # merged = pd.merge(
+        #     merged, metadata,
+        #     on=["StudyID","draw_group"],
+        #     how="left"
+        # )
+
+        # # -------------------------
+        # # *** FIX: Replace split rows with original full rows ***
+        # # -------------------------
+        # if not full_rows.empty:
+        #     # remove any split versions of these rows
+        #     merged = merged[
+        #         ~merged.set_index(["StudyID","draw_group"]).index.isin(
+        #             full_rows.set_index(["StudyID","draw_group"]).index
+        #         )
+        #     ]
+
+        #     # add back the correct original multi-value rows
+        #     merged = pd.concat([merged, full_rows], ignore_index=True)
+
+        #     # remove duplicates
+        #     merged = merged.drop_duplicates(subset=["StudyID","draw_group"], keep="last")
+
+        # # -------------------------
+        # # 6. Final order
+        # #-------------------------
+        # final_order = [
+        #     'Study','StudyID','draw_group','Time','CAS','VTE_type','VTE',
+        #     'Hemoglobin','Creatinine',
+        #     'R_time','K_time','Alpha_Angle','MA','LY30','ACT',
+        #     'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma',
+        # ]
+
+        # final_order = [c for c in final_order if c in merged.columns]
+
+        # merged = merged[final_order]
+
+        return merged
+
+
+        
+
+      
+
+
 
 
     def get_full_dataframe(self):
@@ -838,25 +946,74 @@ class RedcapProcessor:
         return pd.concat(dfs, ignore_index=True)
     
 
-   
+    def get_demo(self, StudyID):
+        """
+        Return the demographics stored for a single patient as a DataFrame.
+        Read-only, no extra columns added.
+        """
+        if StudyID not in self.records:
+            return pd.DataFrame()  
+        return pd.DataFrame([self.records[StudyID].demographics.copy()]).transpose()
+    
+    def get_draws(self, StudyID):
+        """
+        Return all blood draws for a single patient as a read-only DataFrame.
+        Draw_ID is automatically generated from REDCap fields:
+            redcap_event_name, redcap_repeat_instrument, redcap_repeat_instance
+        Also includes time_injury_lab_hours and time_injury_teg_hours.
+        """
+        if StudyID not in self.records:
+            return pd.DataFrame()
+
+        record = self.records[StudyID]
+        if len(record.blood_draws) == 0:
+            return pd.DataFrame()
+
+        # get injury date from demographics
+        injury_date = record.demographics.get("Injury_date")
+        if injury_date is not None:
+            injury_date = pd.to_datetime(injury_date)
+
+        rows = []
+        for draw in record.blood_draws:
+            # Build unique Draw_ID
+            draw_id = "_".join(
+                str(draw.__dict__.get(col, "")) 
+                for col in ["redcap_event_name", "redcap_repeat_instrument", "redcap_repeat_instance"]
+            ).strip("_")
+
+            row = {"Draw_ID": draw_id}
+
+            # Copy all other lab fields
+            for k, v in draw.__dict__.items():
+                if k not in ["draw_id", "redcap_event_name", "redcap_repeat_instrument", "redcap_repeat_instance"]:
+                    row[k] = v
+
+            # Add time differences
+            # Lab
+            draw_date_lab = getattr(draw, "Draw_date_lab", None)
+            if injury_date is not None and draw_date_lab is not None:
+                draw_date_lab = pd.to_datetime(draw_date_lab)
+                row["time_injury_lab_hours"] = (draw_date_lab - injury_date).total_seconds() / 3600
+            else:
+                row["time_injury_lab_hours"] = None
+
+            # TEG
+            draw_date_teg = getattr(draw, "Draw_date_teg", None)
+            if injury_date is not None and draw_date_teg is not None:
+                draw_date_teg = pd.to_datetime(draw_date_teg)
+                row["time_injury_teg_hours"] = (draw_date_teg - injury_date).total_seconds() / 3600
+            else:
+                row["time_injury_teg_hours"] = None
+
+            rows.append(row)
+
+        return pd.DataFrame(rows)
+
+    
+    
 
 
-#     # --------------------------------------------------------------------------------------------------OLD CODE WORKED
-   
-
-#        
-
-
-# 
-#         
-
-#     
-        
-#  
-#         
-
-
-        
     
 # -----------------------
 # BloodDraw and Record classes
@@ -898,30 +1055,8 @@ class Record:
         return self.blood_draws
 
 
-    # def add_treatment(self):
-  
-
-    #     checked = [
-    #         label for col, label in treatment_map.items()
-    #         if self.demographics.get(col) == 'Checked'
-    #     ]
-
-    #     treatment = "/".join(checked) if checked else None
-    #     self.demographics['Treatment_raw'] = treatment
-
-    #     # Apply arth_fix if provided
-    #     if self.arth_fix and treatment in self.arth_fix:
-    #         self.demographics['Treatment'] = self.arth_fix[treatment]
-    #     else:
-    #         self.demographics['Treatment'] = treatment
-
-
-
-
-
-
     # ---------------------------------------------------
-    # ⭐ NEW: Return demographics as a DataFrame
+    # ⭐ Return demographics as a DataFrame
     # ---------------------------------------------------
     def to_demographics_dataframe(self):
         df = pd.DataFrame([self.demographics])
@@ -929,25 +1064,58 @@ class Record:
         return df
 
     # ---------------------------------------------------
-    # ⭐ NEW: Return labs-only as a DataFrame
+    # ⭐ Return labs-only as a DataFrame
     # ---------------------------------------------------
     def to_lab_dataframe(self):
-        """Each blood draw = one row; no demographics."""
+        """Each blood draw = one row; includes time from injury to lab/TEG."""
         if len(self.blood_draws) == 0:
             return pd.DataFrame()
 
+        # get injury date from demographics
+        injury_date = self.demographics.get("Injury_date")
+        if injury_date is not None:
+            # ensure it is a pandas datetime
+            injury_date = pd.to_datetime(injury_date)
+
         rows = []
         for draw in self.blood_draws:
-            row = {"StudyID": self.record_id, "Draw_ID": draw.draw_id}
+            # Build Draw_ID (you can also include redcap_event_name etc.)
+            draw_id = getattr(draw, "draw_id", None) or "_".join(
+                str(draw.__dict__.get(col, "")) 
+                for col in ["redcap_event_name", "redcap_repeat_instrument", "redcap_repeat_instance"]
+            ).strip("_")
+
+            row = {"StudyID": self.record_id, "Draw_ID": draw_id}
+
+            # Copy all lab fields
             for k, v in draw.__dict__.items():
-                if k != "draw_id":   # avoid duplicating
+                if k not in ["draw_id", "redcap_event_name", "redcap_repeat_instrument", "redcap_repeat_instance"]:
                     row[k] = v
+
+            # Compute time differences if possible
+            # Lab
+            draw_date_lab = getattr(draw, "Draw_date_lab", None)
+            if injury_date is not None and draw_date_lab is not None:
+                draw_date_lab = pd.to_datetime(draw_date_lab)
+                row["time_injury_lab_hours"] = (draw_date_lab - injury_date).total_seconds() / 3600
+            else:
+                row["time_injury_lab_hours"] = None
+
+            # TEG
+            draw_date_teg = getattr(draw, "Draw_date_teg", None)
+            if injury_date is not None and draw_date_teg is not None:
+                draw_date_teg = pd.to_datetime(draw_date_teg)
+                row["time_injury_teg_hours"] = (draw_date_teg - injury_date).total_seconds() / 3600
+            else:
+                row["time_injury_teg_hours"] = None
+
             rows.append(row)
 
         return pd.DataFrame(rows)
 
+
     # ---------------------------------------------------
-    # ⭐ NEW: Full flattened DF = demographics + labs
+    # ⭐ Full flattened DF = demographics + labs
     # ---------------------------------------------------
     def to_dataframe(self):
         df_labs = self.to_lab_dataframe()
