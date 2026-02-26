@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from scipy.stats import wilcoxon
 from scipy.stats import mannwhitneyu
 from tableone import TableOne
+import scikit_posthocs as sp
+import os
 
 def my_tableone(df, cols, cats, non_norm, group):
     new_p_values = {}
@@ -158,6 +160,8 @@ def plot_variables_over_time(
     xlabel="Timepoint",
     var_labels=None,  
     legend_title=None,
+    dashes=None,
+    out_dir="Results"
 ):
     """
     Plot TEG/other variables over ordered timepoints.
@@ -189,7 +193,7 @@ def plot_variables_over_time(
         # df[variables] = pd.to_numeric(df[variables], errors='coerce')
 
     if custom_order is None:
-        custom_order = ['Pre_op', 'POD1', 'POD3', 'POD5', 'POD7', 'Week2', 'Week4', 'Week6', 'Month3']
+        custom_order = ['Pre_Op', 'POD1', 'POD3', 'POD5', 'POD7', 'Week2', 'Week4', 'Week6', 'Month3']
 
     if var_labels is None:
         var_labels = {var: var.replace('_',' ').title() for var in variables}
@@ -201,6 +205,11 @@ def plot_variables_over_time(
     if palette is None and hue is not None:
         palette = sns.color_palette("Set2", n_colors=df[hue].nunique())
 
+    if dashes is None:
+        dashes={"No": (4, 2), "Yes": (None, None)}
+
+    os.makedirs(out_dir, exist_ok=True)
+
     for var in variables:
         fig, ax = plt.subplots(figsize=(10, 4))
         sns.lineplot(
@@ -209,17 +218,20 @@ def plot_variables_over_time(
             estimator='mean', errorbar='se',
             markers=True, linewidth=2,
             palette=palette,
-            dashes={"No": (4, 2), "Yes": (None, None)}
+            dashes=dashes
         )
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+        # ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+        plt.setp(ax.get_xticklabels(), rotation=0)
         ax.set_xlabel(xlabel, fontsize=12)
         ax.set_ylabel(var_labels.get(var, var), fontsize=12)  
         if legend_title:
             ax.legend(title=legend_title, loc=2)
         ax.set_title(var_labels.get(var, var), fontsize=14)
         ax.grid(True, alpha=0.3)
-        plt.tight_layout()
         plt.margins(0)
+        out_path = os.path.join(out_dir, f"{var}_over_time.png")
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=300)
         plt.show()
 
 
@@ -244,7 +256,7 @@ def display_summary_tables(df, filter_col, filter_value='Yes', extra_col=None, d
     df_filtered = df[df[filter_col] == filter_value][cols].drop_duplicates().reset_index(drop=True)
     
     # 2) Create tables per Study
-    studies = ['Hip', 'Femur', 'Pelvis', 'Pathway']
+    studies = ['Hip', 'Femur', 'Pelvis', 'Pathway','Arthoplasty']
     tables = {s: df_filtered[df_filtered['Study'] == s].copy() for s in studies}
     
     # 3) Add numbering and drop Study column if requested
@@ -311,7 +323,7 @@ def display_value_counts_per_study(df, col):
             continue
         
         # Compute value_counts for the whole Study
-        vc = df_s[col].value_counts().reset_index()
+        vc = df_s[col].value_counts(dropna=False).reset_index()
         vc.columns = [col, 'count']
         vc.insert(0, 'No', range(1, len(vc)+1))
         
@@ -348,3 +360,189 @@ def display_value_counts_per_study(df, col):
     html += "</div>"
     
     display_html(html, raw=True)
+
+
+########################################## Dec 23rd
+def hemoglobin_prior_to_first_rbc(
+    df,
+    study_id_col="StudyID",
+    lab_time_col="time_injury_lab_hours",
+    rbc_time_col="time_injury_rbc_hours",
+    hb_col="Hemoglobin",
+    rbc_flag_col="blood_rbc_yn",
+    rbc_date="blood_date",
+    blood_draw_date="Draw_date_lab",
+    blood_rbc='blood_rbc'
+):
+    """
+    Returns the hemoglobin value measured closest in time BEFORE
+    the first RBC transfusion for each StudyID.
+
+    - Keeps all StudyIDs where blood_rbc_yn=='Yes'
+    - If no Hb exists prior to first RBC, Hemoglobin and lab_time_col are NaN
+    """
+
+    required_cols = {study_id_col, lab_time_col, rbc_time_col, hb_col, rbc_flag_col, rbc_date, blood_draw_date, blood_rbc}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    # Only StudyIDs with RBC transfusion
+    rbc_patients = df[df[rbc_flag_col] == 'Yes'][[study_id_col, rbc_time_col]].dropna()
+
+    # First RBC transfusion time per StudyID
+    first_rbc = (
+        rbc_patients
+        .groupby(study_id_col, as_index=False)
+        .min()
+        .rename(columns={rbc_time_col: "first_rbc_time"})
+    )
+
+    # Include all relevant columns for labs
+    labs = df[[study_id_col, lab_time_col, hb_col, rbc_date, blood_draw_date, blood_rbc]].dropna(subset=[hb_col])
+
+    # Merge labs with first RBC times to keep all RBC patients
+    labs_pre_rbc = labs.merge(first_rbc, on=study_id_col, how="right")
+
+    # Keep only labs before first RBC
+    labs_pre_rbc = labs_pre_rbc[labs_pre_rbc[lab_time_col] < labs_pre_rbc["first_rbc_time"]]
+
+    # Pick the latest lab before RBC
+    hb_prior = (
+        labs_pre_rbc
+        .sort_values([study_id_col, lab_time_col])
+        .groupby(study_id_col, as_index=False)
+        .last()
+    )
+
+    # Merge back with all RBC patients to keep StudyIDs with no prior Hb as NaN
+    result = first_rbc.merge(
+        hb_prior[[study_id_col, lab_time_col, hb_col, rbc_date, blood_draw_date, blood_rbc]],
+        on=study_id_col,
+        how='left'
+    )
+
+    # Rename Hb column
+    result = result.rename(columns={hb_col: 'Hemoglobin_prior_to_first_transfusion'})
+
+    return result
+
+
+
+
+
+def dunn_test(df, value_col, group_col, p_adjust='bonferroni'):
+    """
+    Perform Dunn's post-hoc test.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+    value_col : str
+        Numeric variable (e.g. lab value)
+    group_col : str
+        Grouping variable (e.g. treatment, timepoint)
+    p_adjust : str
+        Multiple testing correction (bonferroni, holm, fdr_bh, etc.)
+
+    Returns
+    -------
+    pandas.DataFrame
+        Pairwise adjusted p-values
+    """
+    data = df[[value_col, group_col]].dropna()
+
+    result = sp.posthoc_dunn(
+        data,
+        val_col=value_col,
+        group_col=group_col,
+        p_adjust=p_adjust
+    )
+
+    return result
+
+
+
+
+def detect_non_normal(df, cols, alpha=0.05, min_n=5):
+    non_normal = []
+
+    for c in cols:
+        x = df[c].dropna()
+
+        # skip if too few observations
+        if len(x) < min_n:
+            non_normal.append(c)
+            continue
+
+        try:
+            _, p = shapiro(x)
+            if p < alpha:
+                non_normal.append(c)
+        except Exception:
+            # if test fails, be conservative
+            non_normal.append(c)
+
+    return non_normal
+# import pandas as pd
+
+# def hemoglobin_prior_to_first_rbc(df,
+#                                   study_id_col="StudyID",
+#                                   lab_time_col="time_injury_lab_hours",
+#                                   rbc_time_col="time_injury_rbc_hours",
+#                                   hb_col="Hemoglobin",
+#                                   rbc_flag_col="blood_rbc_yn",
+#                                   rbc_date="blood_date",
+#                                   blood_draw_date="Draw_date_lab",
+#                                   blood_rbc='blood_rbc'
+#                                   ):
+#     """
+#     Returns the hemoglobin value measured closest in time BEFORE
+#     the first RBC transfusion for each StudyID.
+
+#     - Keeps all StudyIDs where blood_rbc_yn=='Yes'
+#     - If no Hb exists prior to first RBC, Hemoglobin and lab_time_col are NaN
+#     """
+
+#     required_cols = {study_id_col, lab_time_col, rbc_time_col, hb_col, rbc_flag_col,rbc_date,blood_draw_date,blood_rbc}
+#     missing = required_cols - set(df.columns)
+#     if missing:
+#         raise ValueError(f"Missing required columns: {missing}")
+
+#     # Only StudyIDs with RBC transfusion
+#     rbc_patients = df[df[rbc_flag_col] == 'Yes'][[study_id_col, rbc_time_col]].dropna()
+
+#     # First RBC transfusion time per StudyID
+#     first_rbc = (
+#         rbc_patients
+#         .groupby(study_id_col, as_index=False)
+#         .min()
+#         .rename(columns={rbc_time_col: "first_rbc_time"})
+#     )
+
+#     # Valid hemoglobin labs only
+#     labs = df[[study_id_col, lab_time_col, hb_col]].dropna(subset=[hb_col])
+
+#     # Keep only labs before first RBC
+#     labs_pre_rbc = labs.merge(first_rbc, on=study_id_col, how="right")  # right merge keeps all StudyIDs
+#     labs_pre_rbc = labs_pre_rbc[labs_pre_rbc[lab_time_col] < labs_pre_rbc["first_rbc_time"]]
+
+#     # Pick the latest lab before RBC
+#     hb_prior = (
+#         labs_pre_rbc
+#         .sort_values([study_id_col, lab_time_col])
+#         .groupby(study_id_col, as_index=False)
+#         .last()
+#     )
+
+#     # Merge back with all RBC patients to keep StudyIDs with no prior Hb as NaN
+#     result = first_rbc.merge(hb_prior[[study_id_col, lab_time_col, hb_col,rbc_date,blood_draw_date,blood_rbc]], 
+#                              on=study_id_col, how='left')
+    
+
+#     result=result.rename(columns={'Hemoglobin':'Hemoglobin_prior_to_first_transfusion'})
+
+#     return result
+
+
+
