@@ -484,6 +484,35 @@ def detect_non_normal(df, cols, alpha=0.05, min_n=5):
             non_normal.append(c)
 
     return non_normal
+
+
+
+
+
+
+
+def extract_var_name(idx):
+    """Extract base variable name from TableOne index (handles MultiIndex)."""
+    if isinstance(idx, tuple):
+        idx = idx[0]
+    return idx.split(',')[0].strip()
+
+
+YELLOW = '#fff3cd'
+
+def highlight_tableone_significant(row, sig_vars):
+    """Highlight entire TableOne rows for significant variables."""
+    var = extract_var_name(row.name)
+    if var in sig_vars:
+        return [f'background-color: {YELLOW}'] * len(row)
+    return [''] * len(row)
+
+
+def highlight_pvals(val):
+    """Highlight significant p-values in post-hoc tables."""
+    if pd.notna(val) and val < 0.05:
+        return f'background-color: {YELLOW}'
+    return ''
 # import pandas as pd
 
 # def hemoglobin_prior_to_first_rbc(df,
