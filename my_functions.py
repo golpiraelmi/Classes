@@ -212,14 +212,34 @@ def plot_variables_over_time(
 
     for var in variables:
         fig, ax = plt.subplots(figsize=(10, 4))
-        sns.lineplot(
-            x='Time', y=var, data=df,
-            hue=hue, style=style,
-            estimator='mean', errorbar='se',
-            markers=True, linewidth=2,
-            palette=palette,
-            dashes=dashes
+        line_kwargs = dict(
+            x='Time',
+            y=var,
+            data=df,
+            hue=hue,
+            style=style,
+            estimator='mean',
+            errorbar='se',
+            markers=True,
+            linewidth=2,
+            palette=palette
         )
+
+        # Only add dashes if style is used
+        if style is not None:
+            if dashes is None:
+                dashes = {"No": (4, 2), "Yes": (None, None)}
+            line_kwargs["dashes"] = dashes
+
+        sns.lineplot(**line_kwargs)
+        # sns.lineplot(
+        #     x='Time', y=var, data=df,
+        #     hue=hue, style=style,
+        #     estimator='mean', errorbar='se',
+        #     markers=True, linewidth=2,
+        #     palette=palette,
+        #     dashes=dashes
+        # )
         # ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
         plt.setp(ax.get_xticklabels(), rotation=0)
         ax.set_xlabel(xlabel, fontsize=12)
