@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 import seaborn as sns
+from statsmodels.stats.proportion import proportions_ztest
 import matplotlib.pyplot as plt
 from scipy.stats import wilcoxon
 from scipy.stats import mannwhitneyu
@@ -9,7 +10,7 @@ from tableone import TableOne
 import scikit_posthocs as sp
 import os
 from scipy import stats
-
+#############################
 def my_tableone(df, cols, cats, non_norm, group):
     new_p_values = {}
 
@@ -72,6 +73,7 @@ def my_tableone(df, cols, cats, non_norm, group):
 
     return table1_df
 
+#############################
 def analyze_hgb(df_blood_draws, pod_time="POD1", title=None):
     """
     Compare hemoglobin from first draw to a specified POD.
@@ -151,6 +153,7 @@ def analyze_hgb(df_blood_draws, pod_time="POD1", title=None):
 
     return results_df
 
+#############################
 def plot_variables_over_time(
     df, 
     custom_order=None, 
@@ -244,15 +247,6 @@ def plot_variables_over_time(
 
 
 
-        # sns.lineplot(
-        #     x='Time', y=var, data=df,
-        #     hue=hue, style=style,
-        #     estimator='mean', errorbar='se',
-        #     markers=True, linewidth=2,
-        #     palette=palette,
-        #     dashes=dashes
-        # )
-        # ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
         plt.setp(ax.get_xticklabels(), rotation=0)
         ax.set_xlabel(xlabel, fontsize=12)
         ax.set_ylabel(var_labels.get(var, var), fontsize=12)  
@@ -266,7 +260,7 @@ def plot_variables_over_time(
         plt.savefig(out_path, dpi=300)
         plt.show()
 
-
+#############################
 def display_summary_tables(df, filter_col, filter_value='Yes', extra_col=None, drop_study=True):
     from IPython.display import display_html
     """
@@ -332,7 +326,7 @@ def display_summary_tables(df, filter_col, filter_value='Yes', extra_col=None, d
 
 
 
-
+#############################
 def display_value_counts_per_study(df, col):
     from IPython.display import display_html
     """
@@ -462,7 +456,7 @@ def hemoglobin_prior_to_first_rbc(
 
 
 
-
+#############################
 def dunn_test(df, value_col, group_col, p_adjust='bonferroni'):
     """
     Perform Dunn's post-hoc test.
@@ -495,7 +489,7 @@ def dunn_test(df, value_col, group_col, p_adjust='bonferroni'):
 
 
 
-
+#############################
 def detect_non_normal(df, cols, alpha=0.05, min_n=5):
     non_normal = []
 
@@ -522,89 +516,29 @@ def detect_non_normal(df, cols, alpha=0.05, min_n=5):
 
 
 
-
+#############################
 def extract_var_name(idx):
     """Extract base variable name from TableOne index (handles MultiIndex)."""
     if isinstance(idx, tuple):
         idx = idx[0]
     return idx.split(',')[0].strip()
 
-
-YELLOW = '#fff3cd'
-
+RED = '#ffcccc'
+#############################
 def highlight_tableone_significant(row, sig_vars):
     """Highlight entire TableOne rows for significant variables."""
     var = extract_var_name(row.name)
     if var in sig_vars:
-        return [f'background-color: {YELLOW}'] * len(row)
+        return [f'background-color: {RED}'] * len(row)
     return [''] * len(row)
-
-
+#############################
 def highlight_pvals(val):
     """Highlight significant p-values in post-hoc tables."""
     if pd.notna(val) and val < 0.05:
-        return f'background-color: {YELLOW}'
+        return f'background-color: {RED}'
     return ''
-# import pandas as pd
 
-# def hemoglobin_prior_to_first_rbc(df,
-#                                   study_id_col="StudyID",
-#                                   lab_time_col="time_injury_lab_hours",
-#                                   rbc_time_col="time_injury_rbc_hours",
-#                                   hb_col="Hemoglobin",
-#                                   rbc_flag_col="blood_rbc_yn",
-#                                   rbc_date="blood_date",
-#                                   blood_draw_date="Draw_date_lab",
-#                                   blood_rbc='blood_rbc'
-#                                   ):
-#     """
-#     Returns the hemoglobin value measured closest in time BEFORE
-#     the first RBC transfusion for each StudyID.
-
-#     - Keeps all StudyIDs where blood_rbc_yn=='Yes'
-#     - If no Hb exists prior to first RBC, Hemoglobin and lab_time_col are NaN
-#     """
-
-#     required_cols = {study_id_col, lab_time_col, rbc_time_col, hb_col, rbc_flag_col,rbc_date,blood_draw_date,blood_rbc}
-#     missing = required_cols - set(df.columns)
-#     if missing:
-#         raise ValueError(f"Missing required columns: {missing}")
-
-#     # Only StudyIDs with RBC transfusion
-#     rbc_patients = df[df[rbc_flag_col] == 'Yes'][[study_id_col, rbc_time_col]].dropna()
-
-#     # First RBC transfusion time per StudyID
-#     first_rbc = (
-#         rbc_patients
-#         .groupby(study_id_col, as_index=False)
-#         .min()
-#         .rename(columns={rbc_time_col: "first_rbc_time"})
-#     )
-
-#     # Valid hemoglobin labs only
-#     labs = df[[study_id_col, lab_time_col, hb_col]].dropna(subset=[hb_col])
-
-#     # Keep only labs before first RBC
-#     labs_pre_rbc = labs.merge(first_rbc, on=study_id_col, how="right")  # right merge keeps all StudyIDs
-#     labs_pre_rbc = labs_pre_rbc[labs_pre_rbc[lab_time_col] < labs_pre_rbc["first_rbc_time"]]
-
-#     # Pick the latest lab before RBC
-#     hb_prior = (
-#         labs_pre_rbc
-#         .sort_values([study_id_col, lab_time_col])
-#         .groupby(study_id_col, as_index=False)
-#         .last()
-#     )
-
-#     # Merge back with all RBC patients to keep StudyIDs with no prior Hb as NaN
-#     result = first_rbc.merge(hb_prior[[study_id_col, lab_time_col, hb_col,rbc_date,blood_draw_date,blood_rbc]], 
-#                              on=study_id_col, how='left')
-    
-
-#     result=result.rename(columns={'Hemoglobin':'Hemoglobin_prior_to_first_transfusion'})
-
-#     return result
-
+#############################
 def compare_to_hypercoagulable_reference(
     df,
     time_col='Time',
@@ -706,3 +640,82 @@ def compare_to_hypercoagulable_reference(
 
     return styled
 
+
+
+
+#############################
+def hypercoagulable_proportion_summary(
+    df,
+    time_col="Time",
+    state_col="hypercoagulable_state",
+    threshold=0.50,
+    alpha=0.05
+):
+    """
+    Compute hypercoagulable proportion %, perform one-sample proportion test,
+    and return styled dataframe.
+
+    Parameters
+    ----------
+    counts : pd.DataFrame
+        Contingency table (Time × hypercoagulable_state) with columns ['Yes','No'].
+
+    threshold : float
+        Null hypothesis proportion.
+
+    alpha : float
+        Significance level.
+
+    Returns
+    -------
+    Styled pandas dataframe
+    """
+    counts = (df.groupby(time_col)[state_col].value_counts().unstack(fill_value=0))
+    percent_df = counts.div(counts.sum(axis=1), axis=0) * 100
+
+    percent_table = counts.astype(str) + " (" + percent_df.round(1).astype(str) + "%)"
+
+    # -------------------------
+    # Statistical testing
+    # -------------------------
+    p_values = []
+
+    for time in counts.index:
+        count_yes = counts.loc[time, "Yes"]
+        nobs = counts.loc[time].sum()
+
+        _, p = proportions_ztest(
+            count_yes,
+            nobs,
+            value=threshold,
+            alternative='larger'
+        )
+
+        p_values.append(p)
+
+    percent_table["p-value (> {:.0%})".format(threshold)] = np.round(p_values, 4)
+
+    percent_table["Significant"] = np.where(
+        percent_table.iloc[:, -1] < alpha,
+        "Yes",
+        "No"
+    )
+
+    # -------------------------
+    # Styling
+    # -------------------------
+    def highlight_significant(row):
+        if row["Significant"] == "Yes":
+            return ['background-color: #ffcccc'] * len(row)
+        return [''] * len(row)
+
+    styled = (
+        percent_table
+        .style
+        .apply(highlight_significant, axis=1)
+        .format({
+            percent_table.columns[-2]: "{:.4f}"
+        })
+    )
+
+    return styled
