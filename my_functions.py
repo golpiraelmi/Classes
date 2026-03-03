@@ -10,6 +10,8 @@ from tableone import TableOne
 import scikit_posthocs as sp
 import os
 from scipy import stats
+from IPython.display import display
+
 #############################
 def my_tableone(df, cols, cats, non_norm, group):
     new_p_values = {}
@@ -72,6 +74,98 @@ def my_tableone(df, cols, cats, non_norm, group):
     table1_df['Test'] = table1_df['Test'].replace({'Kruskal-Wallis': 'Mann-Whitney'})
 
     return table1_df
+
+#############################
+def styled_tableone(
+    df,
+    columns,
+    categorical=None,
+    nonnormal=None,
+    groupby=None,
+    alpha=0.05
+):
+    """
+    Create and display a styled TableOne object with significant p-value highlighting.
+    """
+
+    if categorical is None:
+        categorical = []
+
+    if nonnormal is None:
+        nonnormal = []
+
+    if groupby is None:
+        raise ValueError("groupby must be specified")
+
+    # Create TableOne
+    table = TableOne(
+        df,
+        groupby=groupby,
+        columns=columns,
+        categorical=categorical,
+        nonnormal=nonnormal,
+        htest_name=True,
+        pval=True
+    )
+
+    t1_df = table.tableone.copy()
+
+    # Locate p-value column (MultiIndex-safe)
+    pval_cols = [
+        col for col in t1_df.columns
+        if any(
+            'p' in str(level).lower() and 'val' in str(level).lower()
+            for level in col
+        )
+    ]
+
+    if not pval_cols:
+        raise ValueError("No p-value column found in TableOne output.")
+
+    pval_col = pval_cols[0]
+
+    # Convert p-values to numeric
+    t1_df[pval_col] = pd.to_numeric(t1_df[pval_col], errors='coerce')
+
+    # Identify significant variables
+    significant_rows = t1_df[t1_df[pval_col] < alpha]
+
+    var_names = (
+        significant_rows.index
+        .to_series()
+        .apply(extract_var_name)
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    sig_vars = set(var_names)
+
+    # Styled TableOne display
+    styled_tableone = t1_df.style.apply(
+        lambda row: highlight_tableone_significant(row, sig_vars),
+        axis=1
+    )
+
+    display(styled_tableone)
+
+    return styled_tableone
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #############################
 def analyze_hgb(df_blood_draws, pod_time="POD1", title=None):
