@@ -8,6 +8,7 @@ from scipy.stats import mannwhitneyu
 from tableone import TableOne
 import scikit_posthocs as sp
 import os
+from scipy import stats
 
 def my_tableone(df, cols, cats, non_norm, group):
     new_p_values = {}
@@ -232,6 +233,17 @@ def plot_variables_over_time(
             line_kwargs["dashes"] = dashes
 
         sns.lineplot(**line_kwargs)
+
+        # Add horizontal reference lines for specific variables
+        if var == "MA":
+            ax.axhline(y=65, linestyle="--", linewidth=1.5, color='red')
+        elif var == "AA-ma":
+            ax.axhline(y=50, linestyle="--", linewidth=1.5, color='red')
+
+
+
+
+
         # sns.lineplot(
         #     x='Time', y=var, data=df,
         #     hue=hue, style=style,
@@ -593,5 +605,104 @@ def highlight_pvals(val):
 
 #     return result
 
+def compare_to_hypercoagulable_reference(
+    df,
+    time_col='Time',
+    value_col='MA',
+    reference_value=65,
+    alpha=0.05,
+    time_order=None,
+    return_styled=True
+):
+    """
+    For each timepoint:
+        - Test normality (Shapiro-Wilk)
+        - If normal -> One-sided t-test (mean > reference)
+        - If not normal -> One-sided Wilcoxon
+        - Flag only if statistically greater than reference AND mean >= reference
+    """
 
+    results = []
+
+    for timepoint, group in df.groupby(time_col):
+        values = group[value_col].dropna()
+        n = len(values)
+
+        if n < 3:
+            continue
+
+        # ---- Normality ----
+        shapiro_stat, shapiro_p = stats.shapiro(values)
+        is_normal = shapiro_p > alpha
+
+        # ---- One-sided test (> reference) ----
+        if is_normal:
+            test_name = "One-sample t-test (greater)"
+            stat, p_two_sided = stats.ttest_1samp(values, reference_value)
+            if stat > 0:
+                p_val = p_two_sided / 2
+            else:
+                p_val = 1.0
+        else:
+            test_name = "Wilcoxon (greater)"
+            stat, p_two_sided = stats.wilcoxon(values - reference_value)
+            median_diff = np.median(values - reference_value)
+            if median_diff > 0:
+                p_val = p_two_sided / 2
+            else:
+                p_val = 1.0
+
+        mean_val = values.mean()
+
+        hyper_sig = (p_val < alpha) and (mean_val >= reference_value)
+
+        results.append({
+            "Timepoint": timepoint,
+            "N": n,
+            "Mean": mean_val,
+            "SD": values.std(),
+            # "Normality_p": shapiro_p,
+            "Test Used": test_name,
+            # "Test Statistic": stat,
+            "p-value": p_val,
+            "Hypercoagulable Significant?": "Yes" if hyper_sig else "No"
+        })
+
+    results_df = pd.DataFrame(results)
+
+    # ---- Optional ordering ----
+    if time_order is not None:
+        results_df["Timepoint"] = pd.Categorical(
+            results_df["Timepoint"],
+            categories=time_order,
+            ordered=True
+        )
+        results_df = results_df.sort_values("Timepoint")
+
+    if not return_styled:
+        return results_df
+
+    # =========================
+    # Styling
+    # =========================
+
+    def highlight_hyper(row):
+        if row["Hypercoagulable Significant?"] == "Yes":
+            return ['background-color: #ffcccc'] * len(row)
+        return [''] * len(row)
+
+    styled = (
+        results_df
+        .style
+        .apply(highlight_hyper, axis=1)
+        .format({
+            "Mean": "{:.2f}",
+            "SD": "{:.2f}",
+            # "Normality_p": "{:.4f}",
+            # "Test Statistic": "{:.3f}",
+            "p-value": "{:.4f}"
+        })
+    )
+
+    return styled
 
