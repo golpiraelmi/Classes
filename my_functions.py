@@ -827,7 +827,7 @@ def proportion_summary(
 
 
 #### THIS IS FOR DANIYYA'S PROJECT - DO NOT USE FOR OTHER PROJECTS WITHOUT REVIEWING THE CODE AND ENSURING IT FITS THE NEW DATASET AND ANALYTIC NEEDS! ####
-def table1(df, time_order, groupby, demographic_yn='No'):
+def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
     """
     #### THIS IS FOR DANIYYA'S PROJECT - DO NOT USE FOR OTHER PROJECTS WITHOUT REVIEWING THE CODE AND ENSURING IT FITS THE NEW DATASET AND ANALYTIC NEEDS! ####
     
