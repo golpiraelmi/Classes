@@ -26,20 +26,20 @@ class RedcapProcessor:
             ("bloodwork_hemoglobin", "lp_hemoglobin","blood_work_hemoglobin","lp_hemoglobin","teg_hgb","lab_hemoglobin"): "Hemoglobin",
             ("bloodwork_creatinine", "lp_creatinine","teg_creatinine","lab_creatinine",): "Creatinine",
             ("bloodwork_teg_crt_r", "rteg_crt_rvalue","crt_rvalue","teg_crt_r","teg_globalcrt_rvalue",): "R_time",
-            ("bloodwork_teg_crt_k", "rteg_crt_ktime","crt_ktime","teg_crt_k","teg_globalck_ktime"): "K_time",
+            ("bloodwork_teg_crt_k", "rteg_crt_ktime","crt_ktime","teg_crt_k","teg_globalcrt_ktime"): "K_time",
             ("bloodwork_teg_crt_ang", "rteg_crt_aangle","crt_alpha","teg_crt_aangle","teg_globalcrt_alpha"): "Alpha_Angle",
             ("bloodwork_teg_crt_ma", "rteg_crt_ma","crt_ma","teg_crt_ma","teg_globalcrt_ma",): "MA",
-            ("bloodwork_teg_crt_ly30", "rteg_crt_ly30","crt_ly30","teg_crt_ly30","teg_globalck_ly30",): "LY30",
+            ("bloodwork_teg_crt_ly30", "rteg_crt_ly30","crt_ly30","teg_crt_ly30","teg_globalcrt_ly30",): "LY30",
             ("bloodwork_teg_crt_act", "rteg_crt_tegact","crt_act","teg_crt_tegact","teg_globalcrt_act",): "ACT",
 
             ("bloodwork_teg_adp_agg","pm_adp_aggregation","teg_adp_agg","pm_adp_agg","platmap_adp_aggregation",): "ADP-agg",
             ("bloodwork_teg_adp_inh","pm_adp_inhibition","teg_adp_inh","pm_adp_inh","platmap_adp_inhibition",): "ADP-inh",
-            ("bloodwork_teg_adp_ma","pm_adp_ma","teg_adp_ma","pm_adp_ma","platmap_adp_ma","platmap_adp_ma",): "ADP-ma",
+            ("bloodwork_teg_adp_ma","pm_adp_ma","teg_adp_ma","pm_adp_ma","platmap_adp_ma",): "ADP-ma",
             ("bloodwork_teg_aa_agg","pm_aa_aggregation","teg_aa_agg","pm_aa_agg","platmap_aa_aggregation",): "AA-agg",
             ("bloodwork_teg_aa_inh","pm_aa_inhibition","teg_aa_inh","pm_aa_inh","platmap_aa_inhibition"): "AA-inh",
             ("bloodwork_teg_aa_ma","pm_aa_ma","teg_aa_ma",'pm_aa_ma',"platmap_aa_ma",): "AA-ma",
-            ('rteg_cff_ma','bloodwork_teg_cff_ma','cff_ma','teg_cff_ma','teg_globalcff_ma'): 'CFF-MA',  #New
-            ('pm_actf_ma','bloodwork_teg_actf_ma','pm_actf_ma','teg_actf_ma','platmap_actf_ma',):'ACTF-MA',  # New
+            ('rteg_cff_ma','bloodwork_teg_cff_ma','cff_ma','teg_cff_ma','teg_globalcff_ma'): 'CFF-MA',
+            ('pm_actf_ma','bloodwork_teg_actf_ma','pm_actf_ma','teg_actf_ma','platmap_actf_ma',):'ACTF-MA', 
             ('teg_cff_flev','rteg_cff_flev','cff_flev','teg_globalcff_flev',):'CFF-FLEV',
             ('teg_cff_a10','rteg_cff_a10','bloodwork_teg_cff_a10','teg_globalcff_a10') :'CFF-A10',
 
@@ -873,6 +873,10 @@ class RedcapProcessor:
                 self.df['Treatment']
             )
 
+        # Arthoplasty    
+        if 'preop_treatment' in self.df.columns:
+            self.df['Treatment'] = self.df['preop_treatment']
+            
         print("- Processed fixation/arthoplasty designations")
 
     # ----------------------------------------------------------
@@ -972,7 +976,7 @@ class RedcapProcessor:
         # Define all timepoints, including NaNs if necessary
         time_order = {
             'Admission':1,'Pre_Op':2,'Post_Op':3,'POD1':4,'POD2':5,'POD3':6,'POD4':7,
-            'POD5':8,'POD6':9,'POD7':10,'POD8':11,'POD9':12,'POD10':13,'Week2':14,'Week4':15,'Week6':16, 'Week10':17,'Month3':18
+            'POD5':8,'POD6':9,'POD7':10,'POD8':11,'POD9':12,'POD10':13,'Week2':14,'Week4':15,'Week6':16, 'Week10':17,'Month3':18, 'Unscheduled': 99
         }
 
         lst=['R_time', 'K_time','Alpha_Angle', 'MA',
@@ -994,9 +998,11 @@ class RedcapProcessor:
         self.df['VTE_num']  = self.df['VTE_time'].map(time_order)
 
         # Any record AFTER VTE should be blank
-        mask = self.df['Time_num'] > self.df['VTE_num']
+        mask = self.df['Time_num'] >= self.df['VTE_num']
+
         
         self.df.loc[mask, lst] = np.nan
+
         print("- Removed analysis after VTE event")
     
     # ----------------------------------------------------------

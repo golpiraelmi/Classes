@@ -313,6 +313,22 @@ def plot_variables_over_time(
 
     for var in variables:
         fig, ax = plt.subplots(figsize=(10, 4))
+
+        time_labels = {
+            'Pre_Op': 'PreOp',
+            'Post_Op': 'PO1H',
+            'POD1': 'POD1',
+            'POD3': 'POD3',
+            'POD5': 'PD5',
+            'POD7': 'PD7',
+            'Week2': 'Week2',
+            'Week4': 'Week4',
+            'Week6': 'Week6',
+            'Month3': 'Month3'
+        }
+
+
+
         line_kwargs = dict(
             x='Time',
             y=var,
@@ -333,15 +349,17 @@ def plot_variables_over_time(
             line_kwargs["dashes"] = dashes
 
         sns.lineplot(**line_kwargs)
+        ax.set_xticklabels([time_labels.get(t.get_text(), t.get_text()) 
+                    for t in ax.get_xticklabels()])
         
 
         # Add horizontal reference lines for specific variables
         if var == "MA":
-            ax.axhline(y=65, linestyle="--", linewidth=1.5, color='red')
+            ax.axhline(y=65, linestyle="--", linewidth=1.5, color='black')
         elif var == "AA-inh":
-            ax.axhline(y=20, linestyle="--", linewidth=1.5, color='red')
+            ax.axhline(y=20, linestyle="--", linewidth=1.5, color='black')
         elif var == "AA-ma":
-            ax.axhline(y=50, linestyle="--", linewidth=1.5, color='red')
+            ax.axhline(y=50, linestyle="--", linewidth=1.5, color='black')
 
 
 
@@ -828,51 +846,42 @@ def proportion_summary(
 
 #### THIS IS FOR DANIYYA'S PROJECT - DO NOT USE FOR OTHER PROJECTS WITHOUT REVIEWING THE CODE AND ENSURING IT FITS THE NEW DATASET AND ANALYTIC NEEDS! ####
 def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
-    """
-    #### THIS IS FOR DANIYYA'S PROJECT - DO NOT USE FOR OTHER PROJECTS WITHOUT REVIEWING THE CODE AND ENSURING IT FITS THE NEW DATASET AND ANALYTIC NEEDS! ####
-    
-    Table1 for Demographic
-    Table1 for TEG by timepoint.
 
-    Analyses:
-    1. MA + hypercoagulable_state (all patients)
-    2. Platelet AA variables (exclude ASA)
-
-    If groupby == 'hypercoagulable_state', only LY30 is compared.
-    """
 
     RED = "\033[1;31m"
     BLUE = "\033[1;34m"
     RESET = "\033[0m"
 
-
-# DEMOGRAPHIC TABLE1- where demographic_yn == 'Yes'
-
+    # ===============================
+    # DEMOGRAPHIC ANALYSIS PIPELINE
+    # ===============================
     if demographic_yn == 'Yes':
 
         analyses = [
             {
                 "title": "All Patients",
-                "columns": ['Age','Sex','BMI','comorb_diabetes','comorb_cancer_history','comorb_cardiovascular','comorb_pulmonary','comorb_stroke','comorbidity_yn'],
-                "categorical": ['Sex','comorb_diabetes','comorb_cancer_history','comorb_cardiovascular','comorb_pulmonary','comorb_stroke','comorbidity_yn'],
+                "columns": ['Age','Sex','BMI',
+                            'comorb_diabetes','comorb_cancer_history',
+                            'comorb_cardiovascular','comorb_pulmonary',
+                            'comorb_stroke','comorbidity_yn'],
+                "categorical": ['Sex','comorb_diabetes','comorb_cancer_history',
+                                'comorb_cardiovascular','comorb_pulmonary',
+                                'comorb_stroke','comorbidity_yn'],
                 "nonnormal": [],
                 "filter": None
             }
         ]
-        # Once for VTE included and once for VTE excluded for analysis listed above
+
         for analysis in analyses:
+
             df_base = df.copy()
 
-            if analysis["filter"] is not None:
+            if analysis["filter"]:
                 df_base = analysis["filter"](df_base)
-
-            columns = analysis["columns"].copy()
-            categorical = analysis["categorical"].copy()
-            nonnormal = analysis["nonnormal"].copy()
 
             datasets = {
                 "VTE Included": df_base,
-                "VTE Excluded": df_base[df_base["VTE"] == "No"]
+                "VTE Excluded": df_base.query("VTE == 'No'")
             }
 
             for label, df_ in datasets.items():
@@ -888,15 +897,36 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
                 if df_[groupby].nunique() < 2 or (group_counts == 1).any():
                     print("Insufficient groups for comparison\n")
                     continue
+                # if df_[groupby].nunique() < 2:
+                #     print("Insufficient groups for comparison\n")
+                #     continue
 
-                styled_tableone(df_, columns=columns, categorical=categorical,nonnormal=nonnormal, groupby=groupby)
+                display(TableOne(
+                    df_,
+                    columns=analysis["columns"],
+                    categorical=analysis["categorical"],
+                    nonnormal=analysis["nonnormal"],
+                    groupby=groupby,
+                    pval=True,
+                    normal_test=True,
+                    htest_name=True,
+                    display_all=True,
+                    include_null=False
+                ).tableone)
 
         return
 
 
+    # ===============================
+    # TEG ANALYSIS PIPELINE
+    # ===============================
 
-# TEG ANALYSES REQUIRED
+    if time_order is None:
+        time_iter = sorted(df["Time"].dropna().unique())
+    else:
+        time_iter = time_order
 
+    # Define analyses by grouping variable
     if groupby == "hypercoagulable_state":
 
         analyses = [
@@ -910,11 +940,17 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
         ]
 
     elif groupby == "Pre_op_med":
+
         analyses = [
             {
                 "title": "All Patients",
-                "columns": ['MA','AA-inh','AA-ma','LY30','hypercoagulable_state','platelet_hyperactive_state','platelet_inhibition_state'],
-                "categorical": ['hypercoagulable_state','platelet_hyperactive_state','platelet_inhibition_state'],
+                "columns": ['MA','AA-inh','AA-ma','LY30',
+                            'hypercoagulable_state',
+                            'platelet_hyperactive_state',
+                            'platelet_inhibition_state'],
+                "categorical": ['hypercoagulable_state',
+                                'platelet_hyperactive_state',
+                                'platelet_inhibition_state'],
                 "nonnormal": [],
                 "filter": None
             }
@@ -932,57 +968,70 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
             },
             {
                 "title": "ASA Excluded",
-                "columns": ['AA-inh','AA-ma','platelet_hyperactive_state','platelet_inhibition_state'],
-                "categorical": ['platelet_hyperactive_state','platelet_inhibition_state'],
+                "columns": ['AA-inh','AA-ma',
+                            'platelet_hyperactive_state',
+                            'platelet_inhibition_state'],
+                "categorical": ['platelet_hyperactive_state',
+                                'platelet_inhibition_state'],
                 "nonnormal": [],
-                "filter": lambda d: d[d["Pre_op_med"] != "ASA"]
+                "filter": lambda d: d.query("Pre_op_med != 'ASA'")
             }
         ]
 
-
-
-# TEG TABLE1 MAIN ANALYSIS
-
+    # ===============================
+    # MAIN TEG ANALYSIS LOOP
+    # ===============================
 
     for analysis in analyses:
 
         df_base = df.copy()
 
-        if analysis["filter"] is not None:
+        if analysis["filter"]:
             df_base = analysis["filter"](df_base)
 
-        columns = analysis["columns"].copy()
-        categorical = analysis["categorical"].copy()
-        nonnormal = analysis["nonnormal"].copy()
-
-        # Once for VTE included and once for VTE excluded for analysis listed above
         datasets = {
             "VTE Included": df_base,
-            "VTE Excluded": df_base[df_base["VTE"] == "No"]
+            "VTE Excluded": df_base.query("VTE == 'No'")
         }
 
         for label, df_ in datasets.items():
 
-            if label == "VTE Excluded" and groupby =='VTE':
+            if label == "VTE Excluded" and groupby == 'VTE':
                 continue
 
             print(f"{RED}{analysis['title']} | {label} - grouped by {groupby}{RESET}")
 
-            for Time in time_order:
+            for Time in time_iter:
+                df_time = df_[df_["Time"] == Time]
 
                 print(f"{BLUE}{Time}{RESET}")
                 print(f"{BLUE}{'*'*67}{RESET}")
 
-                df_time = df_[df_["Time"] == Time]
+                
 
                 if df_time.empty:
                     print("No data\n")
                     continue
-
+                
                 group_counts = df_time[groupby].value_counts()
 
                 if df_time[groupby].nunique() < 2 or (group_counts == 1).any():
                     print("Insufficient groups for comparison\n")
                     continue
+                                # if df_time[groupby].nunique() < 2:
+                #     print("Insufficient groups for comparison\n")
+                #     continue
 
-                styled_tableone(df_time, columns=columns, categorical=categorical,nonnormal=nonnormal, groupby=groupby)
+                display(TableOne(
+                    df_time,
+                    columns=analysis["columns"],
+                    categorical=analysis["categorical"],
+                    nonnormal=analysis["nonnormal"],
+                    groupby=groupby,
+                    pval=True,
+                    normal_test=True,
+                    htest_name=True,
+                    display_all=True,
+                    include_null=False
+                ).tableone)
+
