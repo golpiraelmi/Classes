@@ -254,7 +254,8 @@ def plot_variables_over_time(
     var_labels=None,  
     legend_title=None,
     dashes=None,
-    out_dir="Results"
+    out_dir="Results",
+    with_reference_lines='Yes',
 ):
     """
     Plot TEG/other variables over ordered timepoints.
@@ -309,77 +310,146 @@ def plot_variables_over_time(
     if dashes is None:
         dashes={"No": (4, 2), "Yes": (None, None)}
 
-    os.makedirs(out_dir, exist_ok=True)
-
-    for var in variables:
-        fig, ax = plt.subplots(figsize=(10, 4))
-
-        time_labels = {
-            'Pre_Op': 'PreOp',
-            'Post_Op': 'PO1H',
-            'POD1': 'POD1',
-            'POD3': 'POD3',
-            'POD5': 'PD5',
-            'POD7': 'PD7',
-            'Week2': 'Week2',
-            'Week4': 'Week4',
-            'Week6': 'Week6',
-            'Month3': 'Month3'
-        }
 
 
+    if with_reference_lines=='No':
+        output_dir = os.path.join(out_dir, "without_reference_lines")
+        os.makedirs(output_dir, exist_ok=True)
 
-        line_kwargs = dict(
-            x='Time',
-            y=var,
-            data=df,
-            hue=hue,
-            style=style,
-            estimator='mean',
-            errorbar='se',
-            markers=True,
-            linewidth=2,
-            palette=palette
-        )
+        for var in variables:
+            fig, ax = plt.subplots(figsize=(10, 4))
 
-        # Only add dashes if style is used
-        if style is not None:
-            if dashes is None:
-                dashes = {"No": (4, 2), "Yes": (None, None)}
-            line_kwargs["dashes"] = dashes
+            time_labels = {
+                'Pre_Op': 'PreOp',
+                'Post_Op': 'PO1H',
+                'POD1': 'POD1',
+                'POD3': 'POD3',
+                'POD5': 'PD5',
+                'POD7': 'PD7',
+                'Week2': 'Week2',
+                'Week4': 'Week4',
+                'Week6': 'Week6',
+                'Month3': 'Month3'
+            }
 
-        sns.lineplot(**line_kwargs)
-        ax.set_xticklabels([time_labels.get(t.get_text(), t.get_text()) 
-                    for t in ax.get_xticklabels()])
+
+
+            line_kwargs = dict(
+                x='Time',
+                y=var,
+                data=df,
+                hue=hue,
+                style=style,
+                estimator='mean',
+                errorbar='se',
+                markers=True,
+                linewidth=2,
+                palette=palette
+            )
+
+            # Only add dashes if style is used
+            if style is not None:
+                if dashes is None:
+                    dashes = {"No": (4, 2), "Yes": (None, None)}
+                line_kwargs["dashes"] = dashes
+
+            sns.lineplot(**line_kwargs)
+            ax.set_xticklabels([time_labels.get(t.get_text(), t.get_text()) 
+                        for t in ax.get_xticklabels()])
+            
+
+
+            plt.setp(ax.get_xticklabels(), rotation=0)
+            ax.set_xlabel(xlabel, fontsize=12)
+            ax.set_ylabel(var_labels.get(var, var), fontsize=12)  
+            if legend_title:
+                ax.legend(title=legend_title, loc=2)
+            ax.set_title('') #var_labels.get(var, var), fontsize=14
+            ax.grid(True, alpha=0.3)
+            # ax = plt.gca()
+            # print(ax.xaxis.label.get_fontname())
+
+            plt.margins(0)
+            out_path = os.path.join(output_dir, f"{var}_over_time.png")
+            plt.tight_layout()
+            plt.savefig(out_path, dpi=300)
+            plt.show()
+
+    elif with_reference_lines=='Yes':
+        os.makedirs(out_dir, exist_ok=True)
+
+    
+
+        for var in variables:
+            fig, ax = plt.subplots(figsize=(10, 4))
+
+            time_labels = {
+                'Pre_Op': 'PreOp',
+                'Post_Op': 'PO1H',
+                'POD1': 'POD1',
+                'POD3': 'POD3',
+                'POD5': 'PD5',
+                'POD7': 'PD7',
+                'Week2': 'Week2',
+                'Week4': 'Week4',
+                'Week6': 'Week6',
+                'Month3': 'Month3'
+            }
+
+
+
+            line_kwargs = dict(
+                x='Time',
+                y=var,
+                data=df,
+                hue=hue,
+                style=style,
+                estimator='mean',
+                errorbar='se',
+                markers=True,
+                linewidth=2,
+                palette=palette
+            )
+
+            # Only add dashes if style is used
+            if style is not None:
+                if dashes is None:
+                    dashes = {"No": (4, 2), "Yes": (None, None)}
+                line_kwargs["dashes"] = dashes
+
+            sns.lineplot(**line_kwargs)
+            ax.set_xticklabels([time_labels.get(t.get_text(), t.get_text()) 
+                        for t in ax.get_xticklabels()])
+            
+            # Add horizontal reference lines for specific variables
+            if var == "MA":
+                ax.axhline(y=65, linestyle="--", linewidth=1.5, color='black')
+            elif var == "AA-inh":
+                ax.axhline(y=20, linestyle="--", linewidth=1.5, color='black')
+            elif var == "AA-ma":
+                ax.axhline(y=50, linestyle="--", linewidth=1.5, color='black')
+
+            plt.setp(ax.get_xticklabels(), rotation=0)
+            ax.set_xlabel(xlabel, fontsize=12)
+            ax.set_ylabel(var_labels.get(var, var), fontsize=12)  
+            if legend_title:
+                ax.legend(title=legend_title, loc=2)
+            ax.set_title('') #var_labels.get(var, var), fontsize=14
+            ax.grid(True, alpha=0.3)
+            # ax = plt.gca()
+            # print(ax.xaxis.label.get_fontname())
+
+            plt.margins(0)
+            out_path = os.path.join(out_dir, f"{var}_over_time.png")
+            plt.tight_layout()
+            plt.savefig(out_path, dpi=300)
+            plt.show()
+
+
+
+
+
         
-
-        # Add horizontal reference lines for specific variables
-        if var == "MA":
-            ax.axhline(y=65, linestyle="--", linewidth=1.5, color='black')
-        elif var == "AA-inh":
-            ax.axhline(y=20, linestyle="--", linewidth=1.5, color='black')
-        elif var == "AA-ma":
-            ax.axhline(y=50, linestyle="--", linewidth=1.5, color='black')
-
-
-
-
-
-        plt.setp(ax.get_xticklabels(), rotation=0)
-        ax.set_xlabel(xlabel, fontsize=12)
-        ax.set_ylabel(var_labels.get(var, var), fontsize=12)  
-        if legend_title:
-            ax.legend(title=legend_title, loc=2)
-        ax.set_title('') #var_labels.get(var, var), fontsize=14
-        ax.grid(True, alpha=0.3)
-        # ax = plt.gca()
-        # print(ax.xaxis.label.get_fontname())
-
-        plt.margins(0)
-        out_path = os.path.join(out_dir, f"{var}_over_time.png")
-        plt.tight_layout()
-        plt.savefig(out_path, dpi=300)
-        plt.show()
 
 #############################
 def display_summary_tables(df, filter_col, filter_value='Yes', extra_col=None, drop_study=True):
@@ -861,13 +931,18 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
             {
                 "title": "All Patients",
                 "columns": ['Age','Sex','BMI',
-                            'comorb_diabetes','comorb_cancer_history',
-                            'comorb_cardiovascular','comorb_pulmonary',
-                            'comorb_stroke','comorbidity_yn'],
-                "categorical": ['Sex','comorb_diabetes','comorb_cancer_history',
-                                'comorb_cardiovascular','comorb_pulmonary',
-                                'comorb_stroke','comorbidity_yn'],
-                "nonnormal": [],
+                            'Diabetes History','Cancer History',
+                            'Cardiovascular Disease History','Pulmonary Disease History',
+                            'Stroke History','Comorbidity (yes/no)','WOMAC Score','UCLA Score', 
+                            'Ethnicity', 'Smoking History', 'Alcohol (yes/no)', 'Pulmonary Complication',
+                            'Cardiovascular Complication', 'Infection Complication','Surgical Complication','ASA Classification','Anesthesia Type','TXA Type','Arthroplasty Type',
+                            'Intraoperative Fluids','Intraoperative Blood Loss','Intraoperative Fluids Amount','Postoperative Fluids Amount','LOS','Surgical Approach'],
+                 "categorical": ['Sex','Diabetes History','Cancer History',
+                                'Cardiovascular Disease History','Pulmonary Disease History',
+                                'Stroke History','Comorbidity (yes/no)','Ethnicity', 'Smoking History', 'Alcohol (yes/no)','UCLA Score', 'Pulmonary Complication',
+                                'Cardiovascular Complication', 'Infection Complication','Surgical Complication','ASA Classification','Anesthesia Type', 'TXA Type','Arthroplasty Type',
+                                'Intraoperative Fluids','Surgical Approach'],
+                "nonnormal": ['Intraoperative Blood Loss', 'LOS', 'Postoperative Fluids Amount'],
                 "filter": None
             }
         ]
@@ -901,7 +976,7 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
                 #     print("Insufficient groups for comparison\n")
                 #     continue
 
-                display(TableOne(
+                table = TableOne(
                     df_,
                     columns=analysis["columns"],
                     categorical=analysis["categorical"],
@@ -912,7 +987,10 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
                     htest_name=True,
                     display_all=True,
                     include_null=False
-                ).tableone)
+                ).tableone
+
+                display(table.replace("Kruskal-Wallis", "Mann-Whitney U"))
+
 
         return
 
@@ -946,11 +1024,18 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
                 "title": "All Patients",
                 "columns": ['MA','AA-inh','AA-ma','LY30',
                             'hypercoagulable_state',
-                            'platelet_hyperactive_state',
-                            'platelet_inhibition_state'],
+                       
+                            'platelet_hyperactive_state_ref50',
+                            'platelet_hyperactive_state_ref55',
+                            'platelet_inhibition_state_ref20',
+                            'platelet_inhibition_state_ref50',
+                            'platelet_inhibition_state_ref70'],
                 "categorical": ['hypercoagulable_state',
-                                'platelet_hyperactive_state',
-                                'platelet_inhibition_state'],
+                                'platelet_hyperactive_state_ref50',
+                                'platelet_hyperactive_state_ref55',
+                                'platelet_inhibition_state_ref20',
+                                'platelet_inhibition_state_ref50',
+                                'platelet_inhibition_state_ref70'],
                 "nonnormal": [],
                 "filter": None
             }
@@ -969,10 +1054,16 @@ def table1_for_Daniyya(df, time_order, groupby, demographic_yn='No'):
             {
                 "title": "ASA Excluded",
                 "columns": ['AA-inh','AA-ma',
-                            'platelet_hyperactive_state',
-                            'platelet_inhibition_state'],
-                "categorical": ['platelet_hyperactive_state',
-                                'platelet_inhibition_state'],
+                            'platelet_hyperactive_state_ref50',
+                                'platelet_hyperactive_state_ref55',
+                                'platelet_inhibition_state_ref20',
+                                'platelet_inhibition_state_ref50',
+                                'platelet_inhibition_state_ref70'],
+                "categorical": ['platelet_hyperactive_state_ref50',
+                                'platelet_hyperactive_state_ref55',
+                                'platelet_inhibition_state_ref20',
+                                'platelet_inhibition_state_ref50',
+                                'platelet_inhibition_state_ref70'],
                 "nonnormal": [],
                 "filter": lambda d: d.query("Pre_op_med != 'ASA'")
             }

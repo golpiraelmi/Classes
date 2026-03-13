@@ -44,9 +44,6 @@ class RedcapProcessor:
             ('teg_cff_a10','rteg_cff_a10','bloodwork_teg_cff_a10','teg_globalcff_a10') :'CFF-A10',
 
 
-
-
-
             ("blood_rbc","bp_rbc"): "blood_rbc",
             ("lab_rteg_timepoint","bloodwork_timepoint","blood_work_timepoint","rteg_timepoint","lab_timepoint"):'Time',
             ('date_time_injury','adm_injury_date','date_injury'):'Injury_date',
@@ -66,13 +63,32 @@ class RedcapProcessor:
             ('pulmonary','bl_comorbidity_check___4','bl_comorbidities___4',):'comorb_pulmonary',
             ('prior_stroke','bl_comorbidity_check___5','bl_comorbidities___5',):'comorb_stroke',
             ('current_smoker',):'comorbidty_current_smoker',
-            ('pulmonary_yesno','comp_pulmonary','comp_pulmonary_yn'): 'comp_pulmonary',
+            ('pulmonary_yesno','comp_pulmonary','comp_pulmonary_yn',): 'comp_pulmonary',
             ('cardio_yesno','comp_cardio','comp_cardio_yn',): 'comp_cardiovascular',
-            ('infection_yesno','comp_infection','comp_infection_yn',): 'comp_infection',
+            ('infection_yesno','comp_infection','comp_infection_yn','comp_infec_yn',): 'comp_infection',
+            ('comp_surg_other',): 'comp_surgical',
+
+            
             ('cas_score',):'CAS',
             ('cas_timepoint',):'cas_timepoint',
             ('blood_visit_date','blood_date'):'blood_date',
-            ('blood_timepoint','bp_timepoint',):'rbc_timepoint'
+            ('blood_timepoint','bp_timepoint',):'rbc_timepoint',
+            ('womac_score',):'WOMAC_score', #### NEW
+            ('ucla_score',):'UCLA_score', #### NEW
+            ('bl_ethnicity',):'Ethnicity', #### NEW
+            ('bl_smoking_history',):'Smoking_History', #### NEW
+            ('bl_alcohol_yn',):'Alcohol_yn', #### NEW
+            ('bl_asa_class',):'ASA_Classification', #### NEW
+            ('intraop_anesthesia',):'anesthesia_type', #### NEW
+            ('intraop_txa_type',):'TXA_type', #### NEW
+            ('intraop_artho_type',):'artho_type', #### NEW
+            ('intraop_bloodloss',):'intraop_bloodloss',  #### NEW
+            ('intraop_fluids',):'intraop_fluids',  #### NEW
+            ('fluid_lactatedringer',):'fluids_given',  #### NEW
+            ('dsg_date_calc',):'LOS',       #### NEW
+            ('intraop_approach',):'surgical_approach'       #### NEW
+
+
         }
 
         # ---- Timepoint dictionary ----
@@ -245,12 +261,12 @@ class RedcapProcessor:
 
         # ---- Columns to be added to demographic or blood analyses
         self.demographic_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','VTE_time','comorb_diabetes','comorb_cancer',
-                              'comorb_cardiovascular','comorb_pulmonary','comorb_stroke','comp_pulmonary', 'comp_cardiovascular','comp_infection','UTI','Pre_op_med','time_injury_to_surgery_hours',
-                              'total_blood_rbc','blood_rbc_yn']
+                              'comorb_cardiovascular','comorb_pulmonary','comorb_stroke','comp_pulmonary', 'comp_cardiovascular','comp_infection','comp_surgical','UTI','WOMAC_score','UCLA_score','Ethnicity','Smoking_History','Alcohol_yn','Pre_op_med','time_injury_to_surgery_hours',
+                              'total_blood_rbc','blood_rbc_yn','ASA_Classification','anesthesia_type','TXA_type','artho_type','LOS','intraop_fluids','intraop_bloodloss','intraop_fluids_given','postop_fluids_given','surgical_approach']
         
         
         self.lab_cols = ['Study','StudyID', 'Time','CAS','VTE_type','VTE','VTE_time','time_injury_rbc_hours','total_blood_rbc','blood_rbc_yn', 'blood_rbc', 'blood_date','rbc_timepoint', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma',
-                         'AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-FLEV','CFF-A10','Draw_date_lab', 'Draw_date_teg','Pre_op_med','time_injury_to_surgery_hours']
+                         'AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-FLEV','CFF-A10','Draw_date_lab', 'Draw_date_teg','Pre_op_med','time_injury_to_surgery_hours','fluids_given']
         
         # Placeholder for processed DataFrame
         self.df = None
@@ -274,6 +290,14 @@ class RedcapProcessor:
         self._process_surgery_injury_dates()
         self._times_to_analyses()
         self._Process_AO_OTA()
+        self._Process_anesthesia_type()
+        self._Process_txa_type()
+        self._Process_artho_type()
+        self._Process_intraop_bloodloss()
+        self._Process_intraop_fluids()
+        self._Process_surgical_approach()
+        self._Process_fluids_given()
+        self._Process_length_of_stay()
         self._Process_medication()
         self._Process_UTI()
         self._Process_Death_Withdrawals()
@@ -505,7 +529,7 @@ class RedcapProcessor:
         COMORBIDITY_COMPLICATIONS = [
             'comorb_diabetes','comorb_cancer','comorb_cardiovascular',
             'comorb_pulmonary','comorb_stroke',
-            'comp_pulmonary','comp_cardiovascular','comp_infection'
+            'comp_pulmonary','comp_cardiovascular','comp_infection','comp_surgical'
         ]
 
         # Replace map
@@ -717,6 +741,7 @@ class RedcapProcessor:
                 mask = self.df['Draw_date_lab'].isna() & self.df['lab_date_visit'].notna()
                 self.df.loc[mask, 'Draw_date_lab'] = self.df.loc[mask, 'lab_date_visit'] + self.df.loc[mask, 'lab_time_td']
 
+
         print("- Cleaned teg and lab date/time")
             
        
@@ -728,6 +753,143 @@ class RedcapProcessor:
             self.df['AO_OTA'] = (self.df[['ota_type_61', 'ota_type_62']].apply(lambda x: '/'.join(x.dropna().astype(str)), axis=1).replace('', np.nan))
 
         print("- Cleaned AO_OTA classification --> NEED AHDMED'S INPUT")
+
+
+
+    def _Process_anesthesia_type(self):
+        if 'anesthesia_type' in self.df.columns:
+            # Step 1: get indices for rows with valid StudyID
+            valid_idx = self.df[self.df['StudyID'].notna()].index
+            
+            # Step 2: fill only within valid StudyID groups
+            filled = self.df.loc[valid_idx].groupby('StudyID')['anesthesia_type'].apply(lambda x: x.ffill().bfill())
+            
+            # Step 3: assign back to original indices
+            self.df.loc[filled.index, 'anesthesia_type'] = filled
+
+            print("- Anesthesia type processed")
+
+
+    def _Process_txa_type(self):
+        if 'TXA_type' in self.df.columns:
+            # Step 1: get indices for rows with valid StudyID
+            valid_idx = self.df[self.df['StudyID'].notna()].index
+            
+            # Step 2: fill only within valid StudyID groups
+            filled = self.df.loc[valid_idx].groupby('StudyID')['TXA_type'].apply(lambda x: x.ffill().bfill())
+            
+            # Step 3: assign back to original indices
+            self.df.loc[filled.index, 'TXA_type'] = filled
+
+            print("- TXA type processed")
+
+
+    def _Process_artho_type(self):
+        if 'artho_type' in self.df.columns:
+            # Step 1: get indices for rows with valid StudyID
+            valid_idx = self.df[self.df['StudyID'].notna()].index
+            
+            # Step 2: fill only within valid StudyID groups
+            filled = self.df.loc[valid_idx].groupby('StudyID')['artho_type'].apply(lambda x: x.ffill().bfill())
+            
+            # Step 3: assign back to original indices
+            self.df.loc[filled.index, 'artho_type'] = filled
+
+            print("- Arthoplasty type processed")
+
+
+
+    def _Process_intraop_bloodloss(self):
+        if 'intraop_bloodloss' in self.df.columns:
+            # Step 1: get indices for rows with valid StudyID
+            valid_idx = self.df[self.df['StudyID'].notna()].index
+            
+            # Step 2: fill only within valid StudyID groups
+            filled = self.df.loc[valid_idx].groupby('StudyID')['intraop_bloodloss'].apply(lambda x: x.ffill().bfill())
+            
+            # Step 3: assign back to original indices
+            self.df.loc[filled.index, 'intraop_bloodloss'] = filled
+
+            print("- Intraoperative blood loss processed")
+
+
+    def _Process_intraop_fluids(self):
+        if 'intraop_fluids' in self.df.columns:
+            # Step 1: get indices for rows with valid StudyID
+            valid_idx = self.df[self.df['StudyID'].notna()].index
+            
+            # Step 2: fill only within valid StudyID groups
+            filled = self.df.loc[valid_idx].groupby('StudyID')['intraop_fluids'].apply(lambda x: x.ffill().bfill())
+            
+            # Step 3: assign back to original indices
+            self.df.loc[filled.index, 'intraop_fluids'] = filled
+
+            print("- Intraoperative fluids processed")
+
+
+
+    def _Process_surgical_approach(self):
+        if 'surgical_approach' in self.df.columns:
+            # Step 1: get indices for rows with valid StudyID
+            valid_idx = self.df[self.df['StudyID'].notna()].index
+            
+            # Step 2: fill only within valid StudyID groups
+            filled = self.df.loc[valid_idx].groupby('StudyID')['surgical_approach'].apply(lambda x: x.ffill().bfill())
+            
+            # Step 3: assign back to original indices
+            self.df.loc[filled.index, 'surgical_approach'] = filled
+
+            print("- Surgical Approach processed")
+
+
+    def _Process_length_of_stay(self):
+            if 'LOS' in self.df.columns:
+                # Step 1: get indices for rows with valid StudyID
+                valid_idx = self.df[self.df['StudyID'].notna()].index
+                
+                # Step 2: fill only within valid StudyID groups
+                filled = self.df.loc[valid_idx].groupby('StudyID')['LOS'].apply(lambda x: x.ffill().bfill())
+                
+                # Step 3: assign back to original indices
+                self.df.loc[filled.index, 'LOS'] = filled
+
+                print("- LOS processed")
+
+
+
+
+
+
+    def _Process_fluids_given(self):
+        self.df['fluids_given'] = pd.to_numeric(self.df['fluids_given'], errors='coerce')
+
+        # Mask for intra-op event
+        mask_intra = self.df['redcap_event_name'] == 'Intra-Operative (Arm 1: Arm 1)'
+
+        # Extract intra-op fluids
+        self.df['intraop_fluids_given'] = self.df['fluids_given'].where(mask_intra)
+
+        # Propagate the intra-op value to all rows for that StudyID
+        self.df['intraop_fluids_given'] = (
+            self.df.groupby('StudyID')['intraop_fluids_given']
+            .transform('max')
+        )
+
+        # Step 4: replace remaining NaN with 0
+        self.df['intraop_fluids_given'] = self.df['intraop_fluids_given'].fillna(0)
+
+        # Sum all post_op fluids per StudyID
+        self.df['other_fluids'] = self.df.apply(lambda row: row['fluids_given'] if row['redcap_event_name'] != 'Intra-Operative (Arm 1: Arm 1)' else 0, axis=1)
+
+        other_sum = self.df.groupby('StudyID')['other_fluids'].transform('sum')
+
+        # Assign to a new column
+        self.df['postop_fluids_given'] = other_sum
+
+        self.df.drop(columns=['other_fluids'], inplace=True)
+
+        print("- Amount of fluids given processed")
+
      
     # ----------------------------------------------------------
     # STEP 17: Process Medication
@@ -917,19 +1079,6 @@ class RedcapProcessor:
             })
         )
 
-#     def _add_study_names(self):
-#         self.df['Study'] = (self.df['StudyID'].str.extract(r'^(THB-|TH|HPA|TF|TPA|TA-|UKA-|OTT-PATH-)')[0].replace({
-#                 'THB-': 'Pathway',
-#                 'TH': 'Hip',
-#                 'HPA': 'Pathway',
-#                 'OTT-PATH-': 'Pathway',
-#                 'TF': 'Femur',
-#                 'TPA': 'Pelvis',
-#                 'TA-': 'Arthoplasty',
-#                 'UKA-': 'Arthoplasty'   
-#             })
-# )
-
     # ----------------------------------------------------------
     # STEP 22: CAS-score
     # ----------------------------------------------------------
@@ -1003,8 +1152,15 @@ class RedcapProcessor:
         
         self.df.loc[mask, lst] = np.nan
 
+
         print("- Removed analysis after VTE event")
+
+        
     
+
+
+
+
     # ----------------------------------------------------------
     # Build records
     # ----------------------------------------------------------
@@ -1090,7 +1246,7 @@ class RedcapProcessor:
         teg_cols = [
             'Time','R_time','K_time','Alpha_Angle','MA','LY30','ACT',
             'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-A10','CFF-FLEV',
-            'Draw_date_teg','time_injury_teg_hours','time_surgery_teg_hours',
+            'Draw_date_teg','time_injury_teg_hours','time_surgery_teg_hours','fluids_given'
         ]
 
         lab_cols = [
@@ -1129,8 +1285,14 @@ class RedcapProcessor:
         drop_rows = both_missing & rbc_zero
 
         lab_rows = out[~drop_rows].copy()
+        
+        ##### NEW
+        cols = ['StudyID', 'Draw_ID'] + lab_cols
+        cols = [c for c in cols if c in lab_rows.columns]
+        lab_rows = lab_rows[cols].drop_duplicates()
 
-        lab_rows = lab_rows[['StudyID', 'Draw_ID'] + lab_cols].drop_duplicates()
+        # lab_rows = lab_rows[['StudyID', 'Draw_ID'] + lab_cols].drop_duplicates()
+        
 
         # ---------------------- METADATA FRAME ---------------------------
         metadata = out[['StudyID','Draw_ID'] + metadata_cols].drop_duplicates()
@@ -1169,7 +1331,7 @@ class RedcapProcessor:
             'Draw_date_teg','time_injury_teg_hours','time_surgery_teg_hours',
             'blood_rbc_yn',
             'R_time','K_time','Alpha_Angle','MA','LY30','ACT',
-            'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-A10','CFF-FLEV'] #'Draw_ID',
+            'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-A10','CFF-FLEV','fluids_given'] #'Draw_ID',
 
         # Keep only columns that exist (important!)
         lab_rows = lab_rows[[c for c in lab_only_cols if c in lab_rows.columns]]
