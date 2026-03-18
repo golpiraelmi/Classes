@@ -85,7 +85,7 @@ class RedcapProcessor:
             ('intraop_bloodloss','inop_surgery_blood_loss','blood_loss','intraop_blood_loss'):'intraop_bloodloss',  #### NEW
             ('intraop_fluids',):'intraop_fluids',  #### NEW
             ('fluid_lactatedringer','fluids_ringers','fluids_lr'):'fluids_given',  #### NEW
-            ('dsg_date_calc','days_in_hospital',):'LOS',       #### NEW
+            ('dsg_date_calc','days_in_hospital','length_stay'):'LOS',       #### NEW
             ('intraop_approach',):'surgical_approach'       #### NEW
 
 
@@ -302,6 +302,7 @@ class RedcapProcessor:
         self._Process_UTI()
         self._Process_Death_Withdrawals()
         self._process_treatment()
+        self._process_ethnicity()
         self._add_blood_transfusion()
         self._add_study_names()
         self._compute_cas()
@@ -437,12 +438,13 @@ class RedcapProcessor:
             self.df['StudyID'] = self.df['StudyID'].astype(str)
             self.df['StudyID'] = self.df.groupby('index')['StudyID'].ffill().bfill()
             self.df['screening_status'] = self.df.groupby('index')['screening_status'].ffill().bfill()
+            
 
             # keep only eligible → enrolled
             self.df = self.df[
                 self.df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled']
 
-
+        
         print("- Selected Eligible → enrolled patinets in Hip_Pathway Study")
     # ----------------------------------------------------------
     # STEP 8: Process VTE flags
@@ -1043,6 +1045,37 @@ class RedcapProcessor:
             self.df['Treatment'] = self.df['preop_treatment']
             
         print("- Processed fixation/arthoplasty designations")
+
+
+    def _process_ethnicity(self):
+        if 'bl_ethnicity___1'in self.df.columns:
+            ethnicity_map = {
+                'bl_ethnicity___1': 'Indigenous (e.g. First Nation, Inuit, Metis)',
+                'bl_ethnicity___2': 'White/Caucasian',
+                'bl_ethnicity___3': 'East Asian (e.g. Chinese, Japanese, Korean, Taiwanese)',
+                'bl_ethnicity___4': 'Southeast Asian (e.g. Cambodian, Vietnamese, Hmong, Filipino)',
+                'bl_ethnicity___5': 'Middle Eastern, West Central Asian',
+                'bl_ethnicity___6': 'African',
+                'bl_ethnicity___7': 'Latin, Central, and South American',
+                'bl_ethnicity___8': 'South Asian (e.g. Indian, Pakistani, Nepalese, Sri Lankan)'
+            }
+
+            # Find all columns that start with bl_ethnicity___
+            cols = [c for c in self.df.columns if c.startswith('bl_ethnicity___')]
+            if not cols:
+                self.df['Ethnicity'] = np.nan
+                return
+
+            def mapper(row):
+                checked = [
+                    ethnicity_map[col]
+                    for col in cols
+                    if str(row.get(col, "")).strip().lower() in ("checked", "1", "true")
+                ]
+                return "/".join(checked) if checked else np.nan
+
+            self.df['Ethnicity'] = self.df.apply(mapper, axis=1)
+            print("- Processed Ethnicity")
 
     # ----------------------------------------------------------
     # STEP 20: Blood Transfusion
