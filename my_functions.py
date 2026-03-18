@@ -256,6 +256,7 @@ def plot_variables_over_time(
     dashes=None,
     out_dir="Results",
     with_reference_lines='Yes',
+    ylim=None #  Pass a tupple
 ):
     """
     Plot TEG/other variables over ordered timepoints.
@@ -359,12 +360,22 @@ def plot_variables_over_time(
             
 
 
+            # Add ylim
+            if var == "MA":
+                ylim=(None,71.5)
+            elif var == "AA-inh":
+                ylim=(None,75)
+            elif var == "AA-ma":
+                ylim=(None,75)
+
+
             plt.setp(ax.get_xticklabels(), rotation=0)
             ax.set_xlabel(xlabel, fontsize=12)
             ax.set_ylabel(var_labels.get(var, var), fontsize=12)  
             if legend_title:
                 ax.legend(title=legend_title, loc=2)
             ax.set_title('') #var_labels.get(var, var), fontsize=14
+            ax.set_ylim(ylim) #var_labels.get(var, var), fontsize=14
             ax.grid(True, alpha=0.3)
             # ax = plt.gca()
             # print(ax.xaxis.label.get_fontname())
@@ -424,10 +435,13 @@ def plot_variables_over_time(
             # Add horizontal reference lines for specific variables
             if var == "MA":
                 ax.axhline(y=65, linestyle="--", linewidth=1.5, color='black')
+                ylim=(None,71.5)
             elif var == "AA-inh":
-                ax.axhline(y=20, linestyle="--", linewidth=1.5, color='black')
+                ax.axhline(y=50, linestyle="--", linewidth=1.5, color='black')
+                ylim=(None,75)
             elif var == "AA-ma":
                 ax.axhline(y=50, linestyle="--", linewidth=1.5, color='black')
+                ylim=(None,75)
 
             plt.setp(ax.get_xticklabels(), rotation=0)
             ax.set_xlabel(xlabel, fontsize=12)
@@ -435,6 +449,7 @@ def plot_variables_over_time(
             if legend_title:
                 ax.legend(title=legend_title, loc=2)
             ax.set_title('') #var_labels.get(var, var), fontsize=14
+            ax.set_ylim(ylim) #var_labels.get(var, var), fontsize=14
             ax.grid(True, alpha=0.3)
             # ax = plt.gca()
             # print(ax.xaxis.label.get_fontname())

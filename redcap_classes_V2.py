@@ -75,17 +75,17 @@ class RedcapProcessor:
             ('blood_timepoint','bp_timepoint',):'rbc_timepoint',
             ('womac_score',):'WOMAC_score', #### NEW
             ('ucla_score',):'UCLA_score', #### NEW
-            ('bl_ethnicity',):'Ethnicity', #### NEW
-            ('bl_smoking_history',):'Smoking_History', #### NEW
-            ('bl_alcohol_yn',):'Alcohol_yn', #### NEW
+            ('bl_ethnicity','bl_ethinicity','patient_ethnicity',):'Ethnicity', #### NEW
+            ('bl_smoking_history','bl_current_smoke','current_smoker','bl_tobacco'):'Smoking_History', #### NEW
+            ('bl_alcohol_yn','bl_etoh','consume_alcohol',):'Alcohol_yn', #### NEW
             ('bl_asa_class',):'ASA_Classification', #### NEW
-            ('intraop_anesthesia',):'anesthesia_type', #### NEW
-            ('intraop_txa_type',):'TXA_type', #### NEW
+            ('intraop_anesthesia','inop_anaesthesia_type','intraop_anaesthesia','anesth_type',):'anesthesia_type', #### NEW
+            ('intraop_txa_type','inop_txa','intraop_txa','txa_type'):'TXA_type', #### NEW
             ('intraop_artho_type',):'artho_type', #### NEW
-            ('intraop_bloodloss',):'intraop_bloodloss',  #### NEW
+            ('intraop_bloodloss','inop_surgery_blood_loss','blood_loss','intraop_blood_loss'):'intraop_bloodloss',  #### NEW
             ('intraop_fluids',):'intraop_fluids',  #### NEW
-            ('fluid_lactatedringer',):'fluids_given',  #### NEW
-            ('dsg_date_calc',):'LOS',       #### NEW
+            ('fluid_lactatedringer','fluids_ringers','fluids_lr'):'fluids_given',  #### NEW
+            ('dsg_date_calc','days_in_hospital',):'LOS',       #### NEW
             ('intraop_approach',):'surgical_approach'       #### NEW
 
 
@@ -266,7 +266,7 @@ class RedcapProcessor:
         
         
         self.lab_cols = ['Study','StudyID', 'Time','CAS','VTE_type','VTE','VTE_time','time_injury_rbc_hours','total_blood_rbc','blood_rbc_yn', 'blood_rbc', 'blood_date','rbc_timepoint', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma',
-                         'AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-FLEV','CFF-A10','Draw_date_lab', 'Draw_date_teg','Pre_op_med','time_injury_to_surgery_hours','fluids_given']
+                         'AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-FLEV','CFF-A10','Draw_date_lab', 'Draw_date_teg','Pre_op_med','time_injury_to_surgery_hours'] #,'fluids_given'
         
         # Placeholder for processed DataFrame
         self.df = None
@@ -861,34 +861,37 @@ class RedcapProcessor:
 
 
     def _Process_fluids_given(self):
-        self.df['fluids_given'] = pd.to_numeric(self.df['fluids_given'], errors='coerce')
+        if 'fluids_given'in self.df.columns:
+            
+            self.df['fluids_given'] = pd.to_numeric(self.df['fluids_given'], errors='coerce')
 
-        # Mask for intra-op event
-        mask_intra = self.df['redcap_event_name'] == 'Intra-Operative (Arm 1: Arm 1)'
+            # Mask for intra-op event
+            mask_intra = self.df['redcap_event_name'].isin(['Intra-Operative (Arm 1: Arm 1)','Intra-Operative','Intra-Opertative'])
 
-        # Extract intra-op fluids
-        self.df['intraop_fluids_given'] = self.df['fluids_given'].where(mask_intra)
+            # Extract intra-op fluids
+            self.df['intraop_fluids_given'] = self.df['fluids_given'].where(mask_intra)
 
-        # Propagate the intra-op value to all rows for that StudyID
-        self.df['intraop_fluids_given'] = (
-            self.df.groupby('StudyID')['intraop_fluids_given']
-            .transform('max')
-        )
+            # Propagate the intra-op value to all rows for that StudyID
+            self.df['intraop_fluids_given'] = (
+                self.df.groupby('StudyID')['intraop_fluids_given']
+                .transform('max')
+            )
 
-        # Step 4: replace remaining NaN with 0
-        self.df['intraop_fluids_given'] = self.df['intraop_fluids_given'].fillna(0)
+            # Step 4: replace remaining NaN with 0
+            self.df['intraop_fluids_given'] = self.df['intraop_fluids_given'].fillna(0)
 
-        # Sum all post_op fluids per StudyID
-        self.df['other_fluids'] = self.df.apply(lambda row: row['fluids_given'] if row['redcap_event_name'] != 'Intra-Operative (Arm 1: Arm 1)' else 0, axis=1)
+            # Sum all post_op fluids per StudyID
+            mask_postop=self.df['redcap_event_name'].isin(['Intra-Operative (Arm 1: Arm 1)','Intra-Operative','Intra-Opertative','Pre-Operative','Patient Admission',
+                                                           'Patient Screening and Baseline','Admission'])
 
-        other_sum = self.df.groupby('StudyID')['other_fluids'].transform('sum')
+            self.df['other_fluids'] = self.df['fluids_given'].where(~mask_postop, 0)
+            self.df['postop_fluids_given'] = self.df.groupby('StudyID')['other_fluids'].transform('sum')
 
-        # Assign to a new column
-        self.df['postop_fluids_given'] = other_sum
+            # display(self.df[['StudyID','Time','fluids_given']])
 
-        self.df.drop(columns=['other_fluids'], inplace=True)
+            self.df.drop(columns=['other_fluids'], inplace=True)
 
-        print("- Amount of fluids given processed")
+            print("- Amount of fluids given processed")
 
      
     # ----------------------------------------------------------
@@ -1246,12 +1249,12 @@ class RedcapProcessor:
         teg_cols = [
             'Time','R_time','K_time','Alpha_Angle','MA','LY30','ACT',
             'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-A10','CFF-FLEV',
-            'Draw_date_teg','time_injury_teg_hours','time_surgery_teg_hours','fluids_given'
+            'Draw_date_teg','time_injury_teg_hours','time_surgery_teg_hours', #'fluids_given'
         ]
 
         lab_cols = [
             'Time','blood_rbc','blood_date','rbc_timepoint','Hemoglobin','Creatinine',
-            'Draw_date_lab','time_injury_lab_hours','time_surgery_lab_hours','time_injury_rbc_hours'
+            'Draw_date_lab','time_injury_lab_hours','time_surgery_lab_hours','time_injury_rbc_hours', #'fluids_given'
         ]
 
         metadata_cols = [
@@ -1272,6 +1275,7 @@ class RedcapProcessor:
         keep_teg = has_teg | has_cas
         teg_rows = out[keep_teg].copy()
         cols_to_keep_teg = ['StudyID','Draw_ID'] + teg_cols + cas_cols
+        cols_to_keep_teg = [c for c in cols_to_keep_teg if c in teg_rows.columns]
         teg_rows = teg_rows[cols_to_keep_teg].drop_duplicates()
 
         # ---------------------- LAB   ROWS -------------------------------
@@ -1331,7 +1335,7 @@ class RedcapProcessor:
             'Draw_date_teg','time_injury_teg_hours','time_surgery_teg_hours',
             'blood_rbc_yn',
             'R_time','K_time','Alpha_Angle','MA','LY30','ACT',
-            'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-A10','CFF-FLEV','fluids_given'] #'Draw_ID',
+            'ADP-agg','ADP-inh','ADP-ma','AA-agg','AA-inh','AA-ma','CFF-MA','ACTF-MA','CFF-A10','CFF-FLEV'] #'Draw_ID',,'fluids_given'
 
         # Keep only columns that exist (important!)
         lab_rows = lab_rows[[c for c in lab_only_cols if c in lab_rows.columns]]
