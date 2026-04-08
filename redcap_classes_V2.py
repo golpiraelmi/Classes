@@ -86,7 +86,8 @@ class RedcapProcessor:
             ('intraop_fluids',):'intraop_fluids',  #### NEW
             ('fluid_lactatedringer','fluids_ringers','fluids_lr'):'fluids_given',  #### NEW
             ('dsg_date_calc','days_in_hospital','length_stay'):'LOS',       #### NEW
-            ('intraop_approach',):'surgical_approach'       #### NEW
+            ('intraop_approach',):'surgical_approach' ,      #### NEW
+            ('intraop_op_time',):'length_of_surgery'       #### NEW
 
 
         }
@@ -190,7 +191,8 @@ class RedcapProcessor:
                     'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
                     'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
                     'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
-                    'HPA-051','HPA-052','HPA-053', 'HPA-054', 'HPA-055', 'HPA-057', 'HPA-058', 'HPA-059','THB-HPA-007','THB-HPA-013','TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
+                    'HPA-051','HPA-052','HPA-053', 'HPA-054', 'HPA-055', 'HPA-057', 'HPA-058', 'HPA-059','HPA-060','THB-HPA-007','THB-HPA-013','THB-HPA-017','THB-HPA-025','THB-HPA-029','OTT-PATH-002','OTT-HPA-006',
+                    'TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
                     'TH-225', 'TH-227', 'TH-236', 'TH-240','TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
                     'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "DOAC"),
             **dict.fromkeys(['TH-244'], 'Warfarin'),
@@ -262,7 +264,7 @@ class RedcapProcessor:
         # ---- Columns to be added to demographic or blood analyses
         self.demographic_cols = ['Study','StudyID','Death','Withdrawn','Age','Sex','BMI','Injury_date','Admission_date','Surgery_date','AO_OTA','Treatment','DVT','PE','VTE_type','VTE','VTE_time','comorb_diabetes','comorb_cancer',
                               'comorb_cardiovascular','comorb_pulmonary','comorb_stroke','comp_pulmonary', 'comp_cardiovascular','comp_infection','comp_surgical','UTI','WOMAC_score','UCLA_score','Ethnicity','Smoking_History','Alcohol_yn','Pre_op_med','time_injury_to_surgery_hours',
-                              'total_blood_rbc','blood_rbc_yn','ASA_Classification','anesthesia_type','TXA_type','artho_type','LOS','intraop_fluids','intraop_bloodloss','intraop_fluids_given','postop_fluids_given','surgical_approach']
+                              'total_blood_rbc','blood_rbc_yn','ASA_Classification','anesthesia_type','TXA_type','artho_type','LOS','intraop_fluids','intraop_bloodloss','intraop_fluids_given','postop_fluids_given','surgical_approach','length_of_surgery']
         
         
         self.lab_cols = ['Study','StudyID', 'Time','CAS','VTE_type','VTE','VTE_time','time_injury_rbc_hours','total_blood_rbc','blood_rbc_yn', 'blood_rbc', 'blood_date','rbc_timepoint', 'Hemoglobin', 'Creatinine', 'R_time', 'K_time','Alpha_Angle', 'MA', 'LY30', 'ACT','ADP-agg', 'ADP-inh','ADP-ma',
@@ -445,7 +447,7 @@ class RedcapProcessor:
                 self.df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled']
 
         
-        print("- Selected Eligible → enrolled patinets in Hip_Pathway Study")
+            print("- Selected Eligible → enrolled patinets in Hip_Pathway Study")
     # ----------------------------------------------------------
     # STEP 8: Process VTE flags
     # ----------------------------------------------------------
