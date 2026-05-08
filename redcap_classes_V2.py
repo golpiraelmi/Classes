@@ -1,4 +1,5 @@
 
+from IPython import display
 import pandas as pd
 import numpy as np
 import re
@@ -191,7 +192,8 @@ class RedcapProcessor:
                     'HPA-020', 'HPA-021', 'HPA-022', 'HPA-024', 'HPA-026', 'HPA-028',
                     'HPA-029', 'HPA-030', 'HPA-032', 'HPA-033', 'HPA-035', 'HPA-036',
                     'HPA-038', 'HPA-039', 'HPA-042', 'HPA-043','HPA-048', 'HPA-050' ,
-                    'HPA-051','HPA-052','HPA-053', 'HPA-054', 'HPA-055', 'HPA-057', 'HPA-058', 'HPA-059','HPA-060','THB-HPA-007','THB-HPA-013','THB-HPA-017','THB-HPA-025','THB-HPA-029','OTT-PATH-002','OTT-HPA-006',
+                    'HPA-051','HPA-052','HPA-053', 'HPA-054', 'HPA-055', 'HPA-057', 'HPA-058', 'HPA-059','HPA-060','HPA-063',
+                    'THB-HPA-007','THB-HPA-013','THB-HPA-017','THB-HPA-025','THB-HPA-029','OTT-PATH-002','OTT-HPA-006',
                     'TH-162', 'TH-170', 'TH-198', 'TH-212', 'TH-217', 
                     'TH-225', 'TH-227', 'TH-236', 'TH-240','TH-255', 'TH-262', 'TH-267', 'TH-274', 'TH-284','TH-286',
                     'TH-302', 'TF-121','TF-128', 'TPA-058','TPA-082','TPA-093' ], "DOAC"),
@@ -292,6 +294,7 @@ class RedcapProcessor:
         self._process_surgery_injury_dates()
         self._times_to_analyses()
         self._Process_AO_OTA()
+        # self._Process_CFS()
         self._Process_anesthesia_type()
         self._Process_txa_type()
         self._Process_artho_type()
@@ -758,6 +761,64 @@ class RedcapProcessor:
 
         print("- Cleaned AO_OTA classification --> NEED AHDMED'S INPUT")
 
+    # ----------------------------------------------------------
+    # STEP 16: Process CFS
+    # ----------------------------------------------------------
+    # def _Process_CFS(self):
+    #         # cfs_cols = [
+    #         #     "very_fit", "well", "managing_well", "vulnerable",
+    #         #     "mildly_frail", "moderately_frail", "severely_frail",
+    #         #     "very_severely_frail", "terminally_ill"
+    #         # ]
+
+    #        print(self.df[['StudyID','redcap_event_name', 'vulnerable']].head(20))
+
+            # # Keep only existing columns
+            # existing_cols = [col for col in cfs_cols if col in self.df.columns]
+            # if not existing_cols:
+            #     print("No CFS columns found")
+            #     return
+            
+            # else:
+            #     for col in existing_cols:
+            #         print(col)
+            #         print(self.df[col].unique())
+
+                    
+
+            # # Map numbers to CFS labels
+            # num_to_label = {
+            #     "(1)": "very_fit",
+            #     "(2)": "well",
+            #     "(3)": "managing_well",
+            #     "(4)": "vulnerable",
+            #     "(5)": "mildly_frail",
+            #     "(6)": "moderately_frail",
+            #     "(7)": "severely_frail",
+            #     "(8)": "very_severely_frail",
+            #     "(9)": "terminally_ill",
+            #     # also support just numbers without parentheses
+            #     1: "very_fit",
+            #     2: "well",
+            #     3: "managing_well",
+            #     4: "vulnerable",
+            #     5: "mildly_frail",
+            #     6: "moderately_frail",
+            #     7: "severely_frail",
+            #     8: "very_severely_frail",
+            #     9: "terminally_ill",
+            # }
+
+            # # Step 1: map each column
+            # for col in existing_cols:
+            #     self.df[col] = self.df[col].map(num_to_label)
+
+            # # Step 2: merge into single CFS_score (first non-NaN per row)
+            # self.df["CFS_score"] = self.df[existing_cols].bfill(axis=1).iloc[:, 0]
+
+            # print("CFS_score value counts:")
+            # print(self.df["CFS_score"].value_counts())
+        
 
 
     def _Process_anesthesia_type(self):
