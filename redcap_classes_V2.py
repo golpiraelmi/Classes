@@ -151,11 +151,11 @@ class RedcapProcessor:
 
 
             "POD5": ['pod 5','POD5','POD 5','Day 5 post-op','PO Day 5','Day 5 Post-Op','Day 5 post op','Day 5 Post-op',
-                     'Day 5 po','Post Operative Day 5','POD 5 '],
+                     'Day 5 po','Post Operative Day 5','POD 5 ','PD5'],
 
             "POD6":['pod 3 - surgery 2','POD6'],
 
-            "POD7": ['POD7','POD 7','PO Day 7','Post Operative Day 7','pod 7', 'POD7','Day 7 post-op'],
+            "POD7": ['POD7','POD 7','PO Day 7','Post Operative Day 7','pod 7', 'POD7','Day 7 post-op','PD7'],
 
             "Week2": ['2 week','2 Week FU','2 weeks follow up','2-Week','2 weeks','2 Week','2weeks','2 Week F/U',
                         '2 week F/U','2 week follow-up','2-week','2 Week PO','2 week post#','2 weeks ','Week2','2week',
@@ -253,7 +253,7 @@ class RedcapProcessor:
         self.vte_timepoints = {'TH-003':'Week6','TH-082':'Week2','TH-088':'POD1','TH-201':'POD2','TH-227':'POD3','TH-253':'POD2','TH-261':'POD3','TH-264':'POD3','TH-271':'POD2',
                                'TH-279':'POD2','TH-292':'POD3','TH-301':'POD3','TF-022':'Pre_Op','TF-027':'POD4','TF-069':'POD6','TF-073':'Week2','TF-075':'POD10','TF-085':'Week2',
                                'TF-120':'POD2','TPA-001':'POD1','TPA-010':'POD5','TPA-011':'Week6','TPA-016':'Week2','TPA-019':'POD1','TPA-021':'POD4','TPA-026':'POD3','TPA-030':'Post_Op',
-                               'TPA-036':'POD1','TPA-061':'POD9','TPA-073':'POD10','TPA-081':'Pre_Op','TPA-095':'POD7','TPA-097':'POD10','TPA-100':'POD1','HPA-028':'POD3', 'TA-056':'POD2', 'TA-015':'Week10'}
+                               'TPA-036':'POD1','TPA-061':'POD9','TPA-073':'POD10','TPA-081':'Pre_Op','TPA-095':'POD7','TPA-097':'POD10','TPA-100':'POD1','HPA-028':'POD3', 'TA-056':'POD2', 'TA-015':'Week10','UKA-02':'POD4'}
         
         self.comp_uti = { **dict.fromkeys(['TH-247','TH-262','TH-265','TH-289','TH-294',
                                            'HPA-001','HPA-009','HPA-019','HPA-021','HPA-022','HPA-038','HPA-050','HPA-053',
@@ -324,7 +324,7 @@ class RedcapProcessor:
     def _fetch_records(self):
         records_data = self.project.export_records(raw_or_label='label')
         self.df = pd.DataFrame(records_data)
-        print('- Data Fetched')
+        print('- Step 01 -Data Fetched')
 
     # ----------------------------------------------------------
     # STEP 2: Clean basic data
@@ -332,6 +332,7 @@ class RedcapProcessor:
     def _clean_data(self):
         # Replace empty strings with NaN
         self.df = self.df.replace(r'^\s*$', np.nan, regex=True)
+        print('- Step 02 -Processed')
 
     # ----------------------------------------------------------
     # STEP 3: Drop irrelevant columns
@@ -350,6 +351,8 @@ class RedcapProcessor:
         if 'screen_patient_id' in self.df.columns:
             self.df = self.df.rename(columns={'screen_patient_id': 'StudyID', 'record_id': 'index'})
 
+        print('- Step 03 -Processed')
+
     # ----------------------------------------------------------
     # STEP 4: Replace columns with replacement dictionary
     # ----------------------------------------------------------
@@ -360,7 +363,7 @@ class RedcapProcessor:
                 if k in self.df.columns:
                     col_mapping[k] = standard_name
         self.df = self.df.rename(columns=col_mapping)
-        print("- Columns renamed")
+        print("- Step 04 -Columns renamed")
   
     # ----------------------------------------------------------
     # STEP 5: Clean StudyID, handle withdrawals
@@ -371,6 +374,7 @@ class RedcapProcessor:
         
         self.df = self.df.replace({'Participant Withdrawn': np.nan})
         self.df['StudyID'] = self.df['StudyID'].astype(str).str.strip()
+        print ('- Step 05 -Processed')
 
     # ----------------------------------------------------------
     # STEP 6: Filter unwanted patients
@@ -407,21 +411,24 @@ class RedcapProcessor:
             print('************************************************************************************')
 
             self.df = self.df[~present_to_remove].copy()
+        print ('- Step 06 -Processed')
         
     # ----------------------------------------------------------
     # STEP 7: Filter by screening_status
     # ----------------------------------------------------------
     def _filter_screening_status(self):
+        # keep eligible → enrolled OR any UKA-* StudyID
         if 'enrolled_yn' in self.df.columns:
             self.df['StudyID'] = self.df['StudyID'].astype(str).str.strip()
 
-            # Keep StudyIDs that have at least one "Enrolled"
             enrolled_mask = (
                 self.df.groupby('StudyID')['enrolled_yn']
                 .transform(lambda x: x.eq('Enrolled').any())
             )
 
-            self.df = self.df[enrolled_mask]
+            uka_mask = self.df['StudyID'].astype(str).str.startswith('UKA-')
+
+            self.df = self.df[enrolled_mask | uka_mask]
 
         
 
@@ -450,7 +457,7 @@ class RedcapProcessor:
                 self.df['screening_status'].astype(str).str.strip() == 'Eligible → enrolled']
 
         
-            print("- Selected Eligible → enrolled patinets in Hip_Pathway Study")
+        print("- Step 07 -Selected Eligible → enrolled patinets in Hip_Pathway Study")
     # ----------------------------------------------------------
     # STEP 8: Process VTE flags
     # ----------------------------------------------------------
@@ -502,12 +509,12 @@ class RedcapProcessor:
         self.df.loc[mask, 'VTE'] = 'Yes'
 
         
-        print("- Flagged patients with VTE")
+        print("- Step 08 -Flagged patients with VTE")
 
         
 
     # ----------------------------------------------------------
-    # STEP 10: VTE_timepoints
+    # STEP 9: VTE_timepoints
     # ----------------------------------------------------------
     def _process_vte_timepoints(self):
         self.df['VTE_time'] = (
@@ -515,18 +522,19 @@ class RedcapProcessor:
             .map(self.vte_timepoints)
             .where(lambda x: x.notna())
         )
-        print("- Added VTE_timepoints")
+        print("- Step 09 -Added VTE_timepoints")
       
     # ----------------------------------------------------------
-    # STEP 11: Missing Values
+    # STEP 10: Missing Values
     # ----------------------------------------------------------
     def _replace_missing_values(self):
         """Convert common REDCap missing codes to NaN"""
         missing_values = ['None', '-999', '', 'NaN','Not applicable','-2997', None] #'Not applicable'
         self.df = self.df.replace(missing_values, np.nan)
+        print('- Step 10 -Processed')
        
     # ----------------------------------------------------------
-    # STEP 12: Process comorbidities
+    # STEP 11: Process comorbidities
     # ----------------------------------------------------------
     def _process_comorbidities_complications(self):
 
@@ -568,10 +576,10 @@ class RedcapProcessor:
         for col in COMORBIDITY_COMPLICATIONS:            
             self.df[col]=self.df[col].replace(np.nan,'No')
 
-        print("- Processed comorbidities and complications")
+        print("- Step 11 -Processed comorbidities and complications")
         
     # ----------------------------------------------------------
-    # STEP 13: Process timepoints
+    # STEP 12: Process timepoints
     # ----------------------------------------------------------
     def _assign_timepoints(self):
 
@@ -595,10 +603,10 @@ class RedcapProcessor:
             else:
                 self.df['Time'] = self.df['Time'].astype(str).str.lower().map(timepoint_dict_lower)
 
-        print("- Processed timepoints")
+        print("- Step 12 -Processed timepoints")
 
     # ----------------------------------------------------------
-    # STEP 14: Process Surgery/Injury date columns
+    # STEP 13: Process Surgery/Injury date columns
     # ----------------------------------------------------------
     def _process_surgery_injury_dates(self):
         if any(col in self.df.columns for col in ['surg_date_pelvis','surg_date_ant_acet','surg_date_post_acet']):
@@ -625,11 +633,11 @@ class RedcapProcessor:
             self.df['Surgery_date'] = pd.to_datetime(self.df['Surgery_date'].astype(str) + ' ' + self.df['intraop_time_surg'].astype(str),
             errors='coerce')
 
-        print("- Cleaned injury/surgery dates")
+        print("- Step 13 -Cleaned injury/surgery dates")
 
 
     # ----------------------------------------------------------
-    # STEP 15: Process times to blood draw
+    # STEP 14: Process times to blood draw
     # ----------------------------------------------------------
     def _times_to_analyses(self):
         if 'blood_date' not in self.df.columns: ####### ADDED DEC 23
@@ -749,17 +757,17 @@ class RedcapProcessor:
                 self.df.loc[mask, 'Draw_date_lab'] = self.df.loc[mask, 'lab_date_visit'] + self.df.loc[mask, 'lab_time_td']
 
 
-        print("- Cleaned teg and lab date/time")
+        print("- Step 14 -Cleaned teg and lab date/time")
             
        
     # ----------------------------------------------------------
-    # STEP 16: Process AO_OTA
+    # STEP 15: Process AO_OTA
     # ----------------------------------------------------------
     def _Process_AO_OTA(self):
         if {'ota_type_61', 'ota_type_62'}.issubset(self.df.columns):
             self.df['AO_OTA'] = (self.df[['ota_type_61', 'ota_type_62']].apply(lambda x: '/'.join(x.dropna().astype(str)), axis=1).replace('', np.nan))
 
-        print("- Cleaned AO_OTA classification --> NEED AHDMED'S INPUT")
+        print("- Step 15 -Cleaned AO_OTA classification --> NEED AHDMED'S INPUT")
 
     # ----------------------------------------------------------
     # STEP 16: Process CFS
@@ -832,7 +840,10 @@ class RedcapProcessor:
             # Step 3: assign back to original indices
             self.df.loc[filled.index, 'anesthesia_type'] = filled
 
-            print("- Anesthesia type processed")
+            print("- Step 16 -Anesthesia type processed")
+
+        else:
+            print("- Step 16 -SKIPPED- anesthesia_type")
 
 
     def _Process_txa_type(self):
@@ -846,7 +857,10 @@ class RedcapProcessor:
             # Step 3: assign back to original indices
             self.df.loc[filled.index, 'TXA_type'] = filled
 
-            print("- TXA type processed")
+            print("- Step 17 -TXA type processed")
+        
+        else:
+            print("- Step 17 -SKIPPED- TXA_type")
 
 
     def _Process_artho_type(self):
@@ -860,22 +874,30 @@ class RedcapProcessor:
             # Step 3: assign back to original indices
             self.df.loc[filled.index, 'artho_type'] = filled
 
-            print("- Arthoplasty type processed")
+            print("- Step 18 -Arthoplasty type processed")
 
+        else:
+            print("- Step 18 -SKIPPED-_Process_artho_type")
 
 
     def _Process_intraop_bloodloss(self):
         if 'intraop_bloodloss' in self.df.columns:
-            # Step 1: get indices for rows with valid StudyID
-            valid_idx = self.df[self.df['StudyID'].notna()].index
-            
-            # Step 2: fill only within valid StudyID groups
-            filled = self.df.loc[valid_idx].groupby('StudyID')['intraop_bloodloss'].apply(lambda x: x.ffill().bfill())
-            
-            # Step 3: assign back to original indices
-            self.df.loc[filled.index, 'intraop_bloodloss'] = filled
+            # rows with valid StudyID
+            valid_idx = self.df['StudyID'].notna()
 
-            print("- Intraoperative blood loss processed")
+            # fill within each StudyID while preserving original index
+            self.df.loc[valid_idx, 'intraop_bloodloss'] = (
+                self.df.loc[valid_idx]
+                .groupby('StudyID')['intraop_bloodloss']
+                .transform(lambda x: x.ffill().bfill())
+            )
+
+            print("- Step 19 -Intraoperative blood loss processed")
+
+        else:
+            print("- Step 19 -SKIPPED- intraop_bloodloss")
+
+  
 
 
     def _Process_intraop_fluids(self):
@@ -884,12 +906,15 @@ class RedcapProcessor:
             valid_idx = self.df[self.df['StudyID'].notna()].index
             
             # Step 2: fill only within valid StudyID groups
-            filled = self.df.loc[valid_idx].groupby('StudyID')['intraop_fluids'].apply(lambda x: x.ffill().bfill())
+            filled = self.df.loc[valid_idx].groupby('StudyID')['intraop_fluids'].transform(lambda x: x.ffill().bfill())
             
             # Step 3: assign back to original indices
             self.df.loc[filled.index, 'intraop_fluids'] = filled
 
-            print("- Intraoperative fluids processed")
+            print("- Step 20 -Intraoperative fluids processed")
+
+        else:
+            print("- Step 20 -SKIPPED- intraop_fluids")
 
 
 
@@ -899,12 +924,15 @@ class RedcapProcessor:
             valid_idx = self.df[self.df['StudyID'].notna()].index
             
             # Step 2: fill only within valid StudyID groups
-            filled = self.df.loc[valid_idx].groupby('StudyID')['surgical_approach'].apply(lambda x: x.ffill().bfill())
+            filled = self.df.loc[valid_idx].groupby('StudyID')['surgical_approach'].transform(lambda x: x.ffill().bfill())
             
             # Step 3: assign back to original indices
             self.df.loc[filled.index, 'surgical_approach'] = filled
 
-            print("- Surgical Approach processed")
+            print("- Step 21 -Surgical Approach processed")
+
+        else:
+            print("- Step 21 -SKIPPED- surgical_approach")
 
 
     def _Process_length_of_stay(self):
@@ -913,12 +941,15 @@ class RedcapProcessor:
                 valid_idx = self.df[self.df['StudyID'].notna()].index
                 
                 # Step 2: fill only within valid StudyID groups
-                filled = self.df.loc[valid_idx].groupby('StudyID')['LOS'].apply(lambda x: x.ffill().bfill())
+                filled = self.df.loc[valid_idx].groupby('StudyID')['LOS'].transform(lambda x: x.ffill().bfill())
                 
                 # Step 3: assign back to original indices
                 self.df.loc[filled.index, 'LOS'] = filled
 
-                print("- LOS processed")
+                print("- Step 22 -LOS processed")
+
+            else:
+                print("- Step 22 -SKIPPED- LOS")
 
 
 
@@ -956,7 +987,10 @@ class RedcapProcessor:
 
             self.df.drop(columns=['other_fluids'], inplace=True)
 
-            print("- Amount of fluids given processed")
+            print("- Step 23 -Amount of fluids given processed")
+
+        else:
+            print("- Step 23 -SKIPPED- fluids_given")
 
      
     # ----------------------------------------------------------
@@ -969,11 +1003,11 @@ class RedcapProcessor:
         missing_mask = self.df['Pre_op_med'].isna()
 
         # Step 3: For missing AND not Arthoplasty → default LMWH
-        arthro_mask = self.df['StudyID'].str.startswith(('TA-', 'UKA-'))
+        arthro_mask = self.df['StudyID'].str.startswith(('TA-','UKA-'))
 
         self.df.loc[missing_mask & ~arthro_mask, 'Pre_op_med'] = 'LMWH'
 
-        print("- Added pre-operative medications")
+        print("- Step 24 -Added pre-operative medications")
 
 
     # ----------------------------------------------------------
@@ -983,7 +1017,7 @@ class RedcapProcessor:
         self.df['UTI'] = self.df['StudyID'].map(self.comp_uti)
         self.df['UTI'] = self.df['UTI'].replace({np.nan: 'No'})
 
-        print("- Added UTI complications")
+        print("- Step 25 -Added UTI complications")
       
     # ----------------------------------------------------------
     # STEP 18: Process Death/Withdrawals
@@ -1046,7 +1080,7 @@ class RedcapProcessor:
                 self.df.loc[self.df['StudyID'] == study_id, 'Withdrawn'] = 'Yes'
 
 
-        print("- Flagged patients' death/Withdrawal status")
+        print("- Step 26 -Flagged patients' death/Withdrawal status")
 
     # ----------------------------------------------------------
     # STEP 19: Process Treatment
@@ -1107,7 +1141,7 @@ class RedcapProcessor:
         if 'preop_treatment' in self.df.columns:
             self.df['Treatment'] = self.df['preop_treatment']
             
-        print("- Processed fixation/arthoplasty designations")
+        print("- Step 27 -Processed fixation/arthoplasty designations")
 
 
     def _process_ethnicity(self):
@@ -1138,7 +1172,7 @@ class RedcapProcessor:
                 return "/".join(checked) if checked else np.nan
 
             self.df['Ethnicity'] = self.df.apply(mapper, axis=1)
-            print("- Processed Ethnicity")
+            print("- Step 28 -Processed Ethnicity")
 
     # ----------------------------------------------------------
     # STEP 20: Blood Transfusion
@@ -1154,10 +1188,10 @@ class RedcapProcessor:
         self.df['total_blood_rbc'] = self.df['StudyID'].map(total_blood_transfusions)
         self.df['blood_rbc_yn'] = np.where(self.df['total_blood_rbc']==0, 'No','Yes')
 
-        print("- Processed blood transfusions")
+        print("- Step 29 -Processed blood transfusions")
 
     # ----------------------------------------------------------
-    # STEP 21: Study Names
+    # STEP 29: Study Names
     # ----------------------------------------------------------
     def _add_study_names(self):
 
@@ -1177,9 +1211,10 @@ class RedcapProcessor:
                 'UKA-': 'Arthoplasty'
             })
         )
+        print('- Step 30 -Processed')
 
     # ----------------------------------------------------------
-    # STEP 22: CAS-score
+    # STEP 30: CAS-score
     # ----------------------------------------------------------
     def _compute_cas(self):
         if 'CAS' not in self.df.columns:
@@ -1195,9 +1230,9 @@ class RedcapProcessor:
 
                     self.df = self.df.drop(columns=['CAS','cas_timepoint']).merge(df_cas, on=['StudyID', 'Time'], how='left')
 
-        print("- Processed CAS scores")
+        print("- Step 31 -Processed CAS scores")
     # ----------------------------------------------------------
-    # STEP 23: Remove data after VTE
+    # STEP 31: Remove data after VTE
     # ----------------------------------------------------------
     def _remove_data_after_vte(self):
         dupes = self.df.columns[self.df.columns.duplicated()]
@@ -1233,7 +1268,7 @@ class RedcapProcessor:
         
         
         if 'Time' not in self.df.columns:
-            self.df['Time'] = 'GOLPIRA'
+            
             print("Warning: 'Time' column is missing. Skipping Time processing.")
         
         
@@ -1246,13 +1281,13 @@ class RedcapProcessor:
         self.df['VTE_num']  = self.df['VTE_time'].map(time_order)
 
         # Any record AFTER VTE should be blank
-        mask = self.df['Time_num'] >= self.df['VTE_num']
+        mask = self.df['Time_num'] > self.df['VTE_num']
 
         
         self.df.loc[mask, lst] = np.nan
 
 
-        print("- Removed analysis after VTE event")
+        print("- Step 32 -Removed analysis after VTE event")
 
         
     
